@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend tests (unit, integration, PostgreSQL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      # includes the Testcontainers tests, which start a real PostgreSQL (Docker is available on the runner)
+      - run: dotnet test backend/Helpdesk.slnx --configuration Release
+
+  sheets-script:
+    name: Google Apps Script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test integrations/google-sheets/Code.test.js
+
+  end-to-end:
+    name: End to end (Docker stack + Google Sheets stand-in)
+    runs-on: ubuntu-latest
+    env:
+      SHEETS_WEBHOOK_URL: http://sheets-stub:8787/exec
+      SHEETS_SECRET: ci-secret
+      SHEETS_INCLUDE_TITLE: "true"
+      SHEETS_INCLUDE_PEOPLE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --profile sheets-demo up -d --build
+      - run: SHEETS_DUMP_URL=http://localhost:8787/dump python3 scripts/smoke_test.py http://localhost:8080
+      - name: Show container logs when something failed
+        if: failure()
+        run: docker compose --profile sheets-demo logs --no-color --tail=200
+      - run: docker compose --profile sheets-demo down -v
+        if: always()

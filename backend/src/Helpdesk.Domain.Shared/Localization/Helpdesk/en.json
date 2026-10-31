@@ -1,0 +1,24 @@
+{
+  "culture": "en",
+  "texts": {
+    "AppName": "Helpdesk",
+    "Menu:Home": "Home",
+    "Welcome": "Welcome",
+    "LongWelcomeMessage": "Welcome to the application. This is a startup project based on the ABP framework. For more information, visit abp.io.",
+    "Helpdesk:NotAllowed": "Your role does not allow this action on the ticket.",
+    "Helpdesk:Ticket:InvalidTransition": "The ticket is {Status} and cannot be changed that way ({Action}).",
+    "Helpdesk:Ticket:ReasonRequired": "A reason is required.",
+    "Helpdesk:Ticket:ReopenWindowExpired": "This ticket was closed more than {Days} days ago. Open a new ticket instead.",
+    "Helpdesk:Ticket:CategoryInactive": "The category is disabled.",
+    "Helpdesk:Ticket:AssigneeNotAgent": "Tickets can only be assigned to agents.",
+    "Helpdesk:Category:DuplicateName": "A category named '{Name}' already exists.",
+    "Helpdesk:Category:InUse": "This category has tickets. Disable it instead of deleting it.",
+    "Permission:Tickets": "Tickets",
+    "Permission:Tickets.Create": "Create tickets",
+    "Permission:Tickets.Work": "Work on tickets (agent)",
+    "Permission:Categories": "Categories",
+    "Permission:Categories.Manage": "Manage categories",
+    "Permission:Reports": "View reports",
+    "Helpdesk": "Helpdesk"
+  }
+}

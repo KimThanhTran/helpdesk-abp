@@ -1,0 +1,77 @@
+# Local demo stack: PostgreSQL, a one-shot migration (with demo data), and the API on http://localhost:8080.
+#
+#   docker compose up --build                       # API only
+#   docker compose --profile sheets-demo up --build # plus a stand-in for the Google Apps Script web app
+#
+# The demo passwords and secrets below are for local use only. Do not deploy this file as it is.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: Helpdesk
+      POSTGRES_USER: helpdesk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-helpdesk-demo-only}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helpdesk -d Helpdesk"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: ./backend
+      target: migrator
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=Helpdesk;User ID=helpdesk;Password=${POSTGRES_PASSWORD:-helpdesk-demo-only}"
+      Helpdesk__SeedDemoData: "true"
+      OpenIddict__Applications__Helpdesk_Swagger__RootUrl: "http://localhost:8080"
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+      target: api
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=Helpdesk;User ID=helpdesk;Password=${POSTGRES_PASSWORD:-helpdesk-demo-only}"
+      App__SelfUrl: "http://localhost:8080"
+      AuthServer__Authority: "http://localhost:8080"
+      AuthServer__RequireHttpsMetadata: "false" # plain HTTP is fine on localhost; keep it true behind a real domain
+      # Google Sheets export: off unless both values are set (see integrations/google-sheets/README.md)
+      Helpdesk__Sheets__WebhookUrl: "${SHEETS_WEBHOOK_URL:-}"
+      Helpdesk__Sheets__Secret: "${SHEETS_SECRET:-}"
+      Helpdesk__Sheets__IncludeTitle: "${SHEETS_INCLUDE_TITLE:-false}"
+      Helpdesk__Sheets__IncludePeople: "${SHEETS_INCLUDE_PEOPLE:-false}"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf \"GET /api/abp/application-configuration HTTP/1.0\r\n\r\n\" >&3 && head -1 <&3 | grep -q 200'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
+  # Optional: runs the real Code.gs against an in-memory fake of Google Sheets, so the whole export chain can be
+  # tried without a Google account. Set SHEETS_WEBHOOK_URL=http://sheets-stub:8787/exec and SHEETS_SECRET=dev-secret.
+  sheets-stub:
+    profiles: ["sheets-demo"]
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./integrations/google-sheets:/app:ro
+    environment:
+      HOST: "0.0.0.0"
+      HELPDESK_SHEETS_SECRET: "${SHEETS_SECRET:-dev-secret}"
+    command: ["node", "local-server.js"]
+    ports:
+      - "8787:8787"
+
+volumes:
+  pgdata:
