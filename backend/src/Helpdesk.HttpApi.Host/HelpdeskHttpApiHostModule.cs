@@ -178,18 +178,34 @@ public class HelpdeskHttpApiHostModule : AbpModule
 
     private static void ConfigureSwaggerServices(ServiceConfigurationContext context, IConfiguration configuration)
     {
-        context.Services.AddAbpSwaggerGenWithOAuth(
-            configuration["AuthServer:Authority"]!,
-            new Dictionary<string, string>
+        // This host has no login page, so Swagger's usual authorization-code flow cannot work.
+        // Swagger asks for a user name and password and exchanges them at /connect/token (password flow).
+        // The client it uses is AuthServer:SwaggerClientId: "Helpdesk_Demo" in the demo stack.
+        var tokenUrl = new Uri($"{configuration["AuthServer:Authority"]!.TrimEnd('/')}/connect/token");
+
+        context.Services.AddAbpSwaggerGen(options =>
+        {
+            options.SwaggerDoc("v1", new OpenApiInfo { Title = "Helpdesk API", Version = "v1" });
+            options.DocInclusionPredicate((docName, description) => true);
+            options.CustomSchemaIds(type => type.FullName);
+
+            options.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
             {
-                    {"Helpdesk", "Helpdesk API"}
-            },
-            options =>
-            {
-                options.SwaggerDoc("v1", new OpenApiInfo { Title = "Helpdesk API", Version = "v1" });
-                options.DocInclusionPredicate((docName, description) => true);
-                options.CustomSchemaIds(type => type.FullName);
+                Type = SecuritySchemeType.OAuth2,
+                Flows = new OpenApiOAuthFlows
+                {
+                    Password = new OpenApiOAuthFlow
+                    {
+                        TokenUrl = tokenUrl,
+                        Scopes = new Dictionary<string, string> { { "Helpdesk", "Helpdesk API" } },
+                    },
+                },
             });
+            options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("oauth2", document)] = new List<string> { "Helpdesk" },
+            });
+        });
     }
 
     private void ConfigureCors(ServiceConfigurationContext context, IConfiguration configuration)

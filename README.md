@@ -66,7 +66,16 @@ cd helpdesk-abp
 docker compose up --build        # PostgreSQL + migrations + demo data + API on http://localhost:8080
 ```
 
-Swagger UI is at <http://localhost:8080/swagger>. The demo data has three users, all with the password `1q2w3E*` (**demo only**): `alice` and `bob` (requesters), `agent1` (agent), plus `admin`.
+The demo data has four users, all with the password `1q2w3E*` (**demo only**): `alice` and `bob` (requesters), `agent1` (agent) and `admin`.
+
+### Try it in Swagger
+
+1. Open <http://localhost:8080/swagger> and click **Authorize**.
+2. Enter a user name (for example `alice`) and the password `1q2w3E*`. `client_id` is already filled in with `Helpdesk_Demo`. Click **Authorize**, then **Close**.
+3. Call `GET /api/app/category` to get a category id, then `POST /api/app/ticket` to open a ticket.
+4. To see the other side, click **Authorize → Logout** and sign in as `agent1`: `GET /api/app/ticket/queue?Scope=1` shows the ticket, and `POST /api/app/ticket/{id}/claim` takes it. Signed in as `bob`, the same ticket answers 404.
+
+The same flow from a shell:
 
 ```bash
 # sign in as alice (password flow, demo client)
