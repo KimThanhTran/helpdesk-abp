@@ -103,3 +103,7 @@ blockquote { margin: .5rem 0; padding-left: .75rem; border-left: 3px solid var(-
 .thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .caption { font-size: .78rem; color: var(--muted); word-break: break-word; }
 .upload input[type='file'] { padding: .3rem; }
+.chosen { list-style: none; padding: 0; margin: 0 0 .75rem; display: grid; gap: .4rem; }
+.chosen li { display: flex; align-items: center; gap: .6rem; font-size: .9rem; }
+.chosen img, .thumb-small { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); }
+.chosen button { margin-left: auto; padding: .1rem .5rem; }

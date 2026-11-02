@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import Attachments from '../components/Attachments';
@@ -148,6 +148,7 @@ function Hints({ ticket, onUseReply }) {
 
 export default function Ticket() {
   const { id } = useParams();
+  const notice = useLocation().state?.notice; // set when the ticket was sent but an image did not upload
   const { user } = useAuth();
   const [draft, setDraft] = useState('');
   const { data: ticket, error, reload } = useLoad((signal) => api.ticket(id, signal), [id]);
@@ -167,6 +168,7 @@ export default function Ticket() {
         <PriorityBadge priority={ticket.priority} /> {ticket.categoryName} · opened by {ticket.requester.name} {formatDate(ticket.creationTime)} ·
         assigned to {ticket.assignee?.name ?? 'nobody yet'} · <SlaBadge ticket={ticket} />
       </p>
+      {notice ? <p className="warn" role="status">{notice}</p> : null}
       {ticket.waitingNote ? <p className="warn">Waiting for the requester: {ticket.waitingNote}</p> : null}
       <section className="card"><p className="text">{ticket.description}</p></section>
       {ticket.resolution ? <section className="card good"><strong>Resolution</strong><p className="text">{ticket.resolution}</p></section> : null}

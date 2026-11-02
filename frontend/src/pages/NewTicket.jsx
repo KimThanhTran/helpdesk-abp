@@ -1,10 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { ACCEPTED, MAX_FILES, problemWith } from '../components/Attachments';
 import { ErrorBox } from '../components/bits';
+import { formatBytes } from '../download';
 import { useDebounced, useLoad } from '../hooks';
 
 const MIN_FOR_HINT = 8; // characters in the title before it is worth asking for a suggestion
+
+/** A small preview of a chosen image, from memory: nothing is uploaded until the ticket is sent. */
+function Preview({ file }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    const made = URL.createObjectURL(file);
+    setUrl(made);
+    return () => URL.revokeObjectURL(made);
+  }, [file]);
+  return url ? <img src={url} alt="" /> : <span className="thumb-small" />;
+}
 
 export default function NewTicket() {
   const navigate = useNavigate();
@@ -15,6 +28,8 @@ export default function NewTicket() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [suggested, setSuggested] = useState([]);
+  const [files, setFiles] = useState([]);
+  const [fileProblem, setFileProblem] = useState(null);
 
   const list = categories.data?.items ?? [];
   const typedTitle = useDebounced(title, 600);
@@ -32,13 +47,38 @@ export default function NewTicket() {
     return () => controller.abort();
   }, [typedTitle, typedDescription]);
 
+  const choose = (event) => {
+    const input = event.target;
+    const chosen = [...input.files];
+    input.value = ''; // the same file can be picked again after removing it
+    let next = files;
+    let problem = null;
+    for (const file of chosen) {
+      const refusal = problemWith(file, next.length);
+      if (refusal) problem = `${file.name}: ${refusal}`;
+      else next = [...next, file];
+    }
+    setFiles(next);
+    setFileProblem(problem ? new Error(problem) : null);
+  };
+
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
       const ticket = await api.createTicket({ categoryId: categoryId || list[0]?.id, title: title.trim(), description: description.trim() });
-      navigate(`/tickets/${ticket.id}`);
+      // the ticket exists now; an image that fails is reported on its page instead of losing the ticket
+      const failed = [];
+      for (const file of files) {
+        try {
+          await api.uploadAttachment(ticket.id, file);
+        } catch (failure) {
+          failed.push(`${file.name} (${failure.message})`);
+        }
+      }
+      const notice = failed.length ? `The ticket was sent, but ${failed.length === 1 ? 'one image' : `${failed.length} images`} could not be attached: ${failed.join('; ')}. You can add it again below.` : undefined;
+      navigate(`/tickets/${ticket.id}`, { state: notice ? { notice } : undefined });
     } catch (failure) {
       setError(failure);
       setBusy(false);
@@ -60,6 +100,21 @@ export default function NewTicket() {
             {list.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
         </label>
+        <label>Images (optional: PNG, JPEG or WebP, up to 5 MB each, {MAX_FILES} per ticket)
+          <input type="file" multiple accept={ACCEPTED.join(',')} onChange={choose} disabled={busy || files.length >= MAX_FILES} />
+        </label>
+        {files.length > 0 ? (
+          <ul className="chosen">
+            {files.map((file, index) => (
+              <li key={`${file.name}-${index}`}>
+                <Preview file={file} />
+                <span>{file.name} · {formatBytes(file.size)}</span>
+                <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setFiles(files.filter((_, i) => i !== index))} disabled={busy}>×</button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <ErrorBox error={fileProblem} />
         {suggested.length > 0 ? (
           <p className="hint">
             Looks like:{' '}

@@ -17,13 +17,13 @@ const ticket = (actions, extra = {}) => ({
   actions, comments: [], events: [], ...extra,
 });
 
-function show(user, data) {
+function show(user, data, state) {
   vi.spyOn(auth, 'useAuth').mockReturnValue({ user });
   vi.spyOn(api, 'ticket').mockResolvedValue(data);
   vi.spyOn(api, 'attachments').mockResolvedValue({ items: [] });
   vi.spyOn(api, 'suggestion').mockResolvedValue({ categories: [], similarTickets: [], suggestedReply: null });
   render(
-    <MemoryRouter initialEntries={['/tickets/t1']}>
+    <MemoryRouter initialEntries={[{ pathname: '/tickets/t1', state }]}>
       <Routes><Route path="/tickets/:id" element={<Ticket />} /></Routes>
     </MemoryRouter>
   );
@@ -82,6 +82,11 @@ describe('Ticket page', () => {
     });
     await userEvent.click(await screen.findByRole('button', { name: 'Use as a reply' }));
     expect(screen.getByLabelText('Add a comment')).toHaveValue('Reinstall the client');
+  });
+
+  it('shows the notice left by the new ticket form when an image did not upload', async () => {
+    show({ id: 'alice', isAgent: false }, ticket([Action.Comment]), { notice: 'The ticket was sent, but one image could not be attached: bad.png.' });
+    expect(await screen.findByRole('status')).toHaveTextContent('could not be attached: bad.png');
   });
 
   it('does not ask for suggestions when the person is a requester', async () => {

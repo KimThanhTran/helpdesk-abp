@@ -33,6 +33,6 @@ again. Images are fetched with the sign-in token and shown from memory; tap one 
 - **The token is kept in memory only**, so closing the app signs you out. Saving it needs secure storage on the device
   (`flutter_secure_storage`), which is not added yet.
 - **Requesters only.** There is no agent queue and no Excel export in the app; those are in the web UI.
-- **Images cannot be saved or shared from the app**, only viewed.
+- **Images cannot be saved or shared from the app**, only viewed, and they are added on the ticket page after the ticket is sent (the web UI also lets you choose them on the New ticket form).
 - **Verified on the web build and in widget tests.** The Android project is generated but has not been built or run on a device,
   and the image chooser has only been exercised through a fake in tests: the real file dialog was not driven.
