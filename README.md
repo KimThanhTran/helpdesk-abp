@@ -8,7 +8,7 @@
 
 A support desk built on the [ABP Framework](https://abp.io): people raise tickets, agents pick them up from a queue and work them to a close, and managers can follow everything in a Google Sheet. It is a REST API with a PostgreSQL database, a React web UI with live notifications, and a Flutter app for requesters.
 
-![An agent's view of a ticket: the actions the server allows, and suggestions from similar closed tickets](docs/agent-ticket.jpg)
+![An agent's view of a ticket: the actions the server allows, suggestions from similar closed tickets, and the attached images (one internal)](docs/agent-ticket.jpg)
 
 The focus of the project is getting the hard parts right and proving it: the ticket life cycle, who may do what, the privacy of internal notes, SLA targets in business hours, safe ticket numbering under load, and an export to Google Sheets that cannot leak or corrupt data.
 
