@@ -65,6 +65,12 @@ public class TicketDto : TicketListItemDto
 
     public int ReopenCount { get; set; }
 
+    /// <summary>Set while the ticket waits for the requester. The SLA clock is stopped until then.</summary>
+    public DateTime? WaitingSince { get; set; }
+
+    /// <summary>Working hours already spent waiting. They have been added to both SLA targets.</summary>
+    public double PausedBusinessHours { get; set; }
+
     /// <summary>What the person asking can do right now. Clients should show exactly these buttons.</summary>
     public List<TicketAction> Actions { get; set; } = new();
 

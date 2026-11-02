@@ -100,6 +100,60 @@ public class BusinessCalendarTests
         Calendar(options => options.TimeZone = "Nowhere/Land").AddBusinessHours(Utc(2, 9), 1).ShouldBe(Utc(2, 10));
     }
 
+    // ------------------------------------------------------------------ hours between two moments
+
+    [Fact]
+    public void Working_hours_between_two_moments_in_one_day()
+    {
+        Calendar().BusinessHoursBetween(Utc(2, 9), Utc(2, 12)).ShouldBe(3);
+    }
+
+    [Fact]
+    public void Nights_are_not_counted()
+    {
+        // Monday 15:00 to Tuesday 10:00: two hours on Monday, two on Tuesday
+        Calendar().BusinessHoursBetween(Utc(2, 15), Utc(3, 10)).ShouldBe(4);
+    }
+
+    [Fact]
+    public void Weekends_are_not_counted()
+    {
+        // Friday 16:00 to Monday 10:00: one hour on Friday, two on Monday
+        Calendar().BusinessHoursBetween(Utc(6, 16), Utc(9, 10)).ShouldBe(3);
+    }
+
+    [Fact]
+    public void Holidays_are_not_counted_between_two_moments()
+    {
+        var calendar = Calendar(options => options.Holidays = new[] { "2026-11-03" });
+
+        // Monday 16:00 to Wednesday 09:00: one hour on Monday, none on the Tuesday holiday, one on Wednesday
+        calendar.BusinessHoursBetween(Utc(2, 16), Utc(4, 9)).ShouldBe(2);
+    }
+
+    [Theory]
+    [InlineData(2, 18, 2, 20)] // after closing
+    [InlineData(7, 10, 7, 14)] // a Saturday
+    [InlineData(2, 12, 2, 12)] // an empty range
+    [InlineData(2, 12, 2, 9)] // a reversed range
+    public void Time_outside_opening_hours_or_an_empty_range_is_zero(int fromDay, int fromHour, int toDay, int toHour)
+    {
+        Calendar().BusinessHoursBetween(Utc(fromDay, fromHour), Utc(toDay, toHour)).ShouldBe(0);
+    }
+
+    [Theory]
+    [InlineData(2, 9, 0.5)]
+    [InlineData(2, 15, 4)]
+    [InlineData(6, 16, 20)]
+    [InlineData(5, 8, 47.25)]
+    public void Adding_working_hours_and_measuring_them_agree(int day, int hour, double hours)
+    {
+        var calendar = Calendar(options => options.Holidays = new[] { "2026-11-10" });
+        var start = Utc(day, hour);
+
+        calendar.BusinessHoursBetween(start, calendar.AddBusinessHours(start, hours)).ShouldBe(hours, tolerance: 1e-6);
+    }
+
     [Fact]
     public void Negative_hours_are_rejected()
     {

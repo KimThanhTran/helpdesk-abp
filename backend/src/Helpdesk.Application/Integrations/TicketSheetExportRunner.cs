@@ -15,7 +15,8 @@ namespace Helpdesk.Integrations;
 /// Reads the committed ticket, builds the summary row and sends it. It runs after the ticket change has
 /// been saved and never throws: a failed export must not turn a saved change into an error for the caller.
 /// </summary>
-public class TicketSheetExportRunner : ITransientDependency
+[ExposeServices(typeof(ITicketChangeSubscriber), IncludeSelf = true)]
+public class TicketSheetExportRunner : ITicketChangeSubscriber, ITransientDependency
 {
     private readonly SheetsExporter _exporter;
     private readonly IRepository<Ticket, Guid> _tickets;
@@ -40,8 +41,15 @@ public class TicketSheetExportRunner : ITransientDependency
         _logger = logger;
     }
 
+    public Task OnTicketChangedAsync(TicketChangedEventData change) => RunAsync(change);
+
     public async Task RunAsync(TicketChangedEventData eventData)
     {
+        if (!_exporter.Enabled)
+        {
+            return;
+        }
+
         try
         {
             TicketSheetRow? row;

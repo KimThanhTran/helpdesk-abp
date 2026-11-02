@@ -54,7 +54,7 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
             actor.UserId, input.CategoryId, input.Title, input.Description, TicketPriority.Normal);
 
         await _tickets.InsertAsync(ticket, autoSave: true);
-        await _eventBus.PublishAsync(new TicketChangedEventData(ticket.Id, TicketEventKind.Created));
+        await _eventBus.PublishAsync(new TicketChangedEventData(ticket.Id, TicketEventKind.Created, actor.UserId));
         return await ToDtoAsync(ticket, actor);
     }
 
@@ -130,7 +130,7 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
 
     public Task<TicketDto> ResumeAsync(Guid id) =>
         ActAsync(id, TicketAction.Resume, TicketEventKind.StatusChanged,
-            (ticket, actor, now) => ticket.Resume(actor.UserId, now));
+            (ticket, actor, _) => _manager.Resume(ticket, actor.UserId));
 
     public Task<TicketDto> ResolveAsync(Guid id, ResolveTicketDto input) =>
         ActAsync(id, TicketAction.Resolve, TicketEventKind.StatusChanged,
@@ -161,15 +161,15 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
 
         var statusBefore = ticket.Status;
         var respondedBefore = ticket.FirstRespondedAt;
-        var comment = ticket.AddComment(
-            actor.UserId, input.Body, input.Visibility, byRequester: ticket.RequesterId == actor.UserId, Clock.Now);
+        var comment = _manager.AddComment(
+            ticket, actor.UserId, input.Body, input.Visibility, byRequester: ticket.RequesterId == actor.UserId);
 
         await _tickets.UpdateAsync(ticket, autoSave: true);
 
         // most comments change nothing a report cares about; tell listeners only when something did
         if (ticket.Status != statusBefore || ticket.FirstRespondedAt != respondedBefore)
         {
-            await _eventBus.PublishAsync(new TicketChangedEventData(ticket.Id, TicketEventKind.StatusChanged));
+            await _eventBus.PublishAsync(new TicketChangedEventData(ticket.Id, TicketEventKind.StatusChanged, actor.UserId));
         }
 
         var names = await NamesAsync(new[] { comment.AuthorId });
@@ -187,7 +187,7 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
         change(ticket, actor, now);
 
         await _tickets.UpdateAsync(ticket, autoSave: true);
-        await _eventBus.PublishAsync(new TicketChangedEventData(ticket.Id, kind));
+        await _eventBus.PublishAsync(new TicketChangedEventData(ticket.Id, kind, actor.UserId));
         return await ToDtoAsync(ticket, actor);
     }
 
@@ -312,6 +312,8 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
         dto.CloseReason = ticket.CloseReason;
         dto.CancelledAt = ticket.CancelledAt;
         dto.ReopenCount = ticket.ReopenCount;
+        dto.WaitingSince = ticket.WaitingSince;
+        dto.PausedBusinessHours = Math.Round(ticket.PausedBusinessHours, 2);
         dto.Actions = TicketPolicy.AllowedActions(ticket, actor, now, _manager.ReopenWindowDays).ToList();
 
         // Internal notes are agents-only: they are removed here, before anything is serialised,

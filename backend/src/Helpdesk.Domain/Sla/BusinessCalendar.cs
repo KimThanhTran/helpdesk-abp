@@ -49,8 +49,7 @@ public class BusinessCalendar : ISingletonDependency
             throw new ArgumentOutOfRangeException(nameof(hours), "Hours cannot be negative.");
         }
 
-        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utcStart, DateTimeKind.Utc), _zone);
-        var cursor = NextOpening(local);
+        var cursor = NextOpening(ToLocal(utcStart));
         var remaining = TimeSpan.FromHours(hours);
 
         while (true)
@@ -68,6 +67,39 @@ public class BusinessCalendar : ISingletonDependency
 
         return TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(cursor, DateTimeKind.Unspecified), _zone);
     }
+
+    /// <summary>How many working hours lie between two UTC moments (0 when the range is empty or entirely off hours).</summary>
+    public double BusinessHoursBetween(DateTime fromUtc, DateTime toUtc)
+    {
+        if (toUtc <= fromUtc)
+        {
+            return 0;
+        }
+
+        var from = ToLocal(fromUtc);
+        var to = ToLocal(toUtc);
+        var hours = 0.0;
+
+        for (var day = from.Date; day <= to.Date; day = day.AddDays(1))
+        {
+            if (!IsWorkingDay(day))
+            {
+                continue;
+            }
+
+            var start = from > day + _start ? from : day + _start;
+            var end = to < day + _end ? to : day + _end;
+            if (end > start)
+            {
+                hours += (end - start).TotalHours;
+            }
+        }
+
+        return hours;
+    }
+
+    private DateTime ToLocal(DateTime utc) =>
+        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone);
 
     /// <summary>The first moment at or after <paramref name="local"/> that falls inside opening hours.</summary>
     private DateTime NextOpening(DateTime local)

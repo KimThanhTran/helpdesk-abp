@@ -51,6 +51,12 @@ public class Ticket : FullAuditedAggregateRoot<Guid>
 
     public int ReopenCount { get; private set; }
 
+    /// <summary>When the current wait for the requester began. Null unless the ticket is waiting.</summary>
+    public DateTime? WaitingSince { get; private set; }
+
+    /// <summary>Working hours spent waiting for the requester so far. They are added to the SLA targets.</summary>
+    public double PausedBusinessHours { get; private set; }
+
     public ICollection<TicketComment> Comments { get; private set; } = new List<TicketComment>();
 
     public ICollection<TicketEvent> Events { get; private set; } = new List<TicketEvent>();
@@ -131,13 +137,15 @@ public class Ticket : FullAuditedAggregateRoot<Guid>
     {
         EnsureStatus(TicketAction.Wait, TicketStatus.Open);
         WaitingNote = RequireText(note, TicketConsts.MaxReasonLength);
+        WaitingSince = now;
         Transition(TicketStatus.Waiting, actorId, now, WaitingNote);
     }
 
-    public void Resume(Guid actorId, DateTime now)
+    /// <summary>Back to open. <paramref name="sla"/> carries the targets moved by the time spent waiting.</summary>
+    public void Resume(Guid actorId, DateTime now, SlaResume? sla = null)
     {
         EnsureStatus(TicketAction.Resume, TicketStatus.Waiting);
-        WaitingNote = null;
+        EndWait(sla);
         Transition(TicketStatus.Open, actorId, now);
     }
 
@@ -216,7 +224,7 @@ public class Ticket : FullAuditedAggregateRoot<Guid>
     /// and an agent's first public message counts as the first response.
     /// </summary>
     public TicketComment AddComment(
-        Guid authorId, string body, CommentVisibility visibility, bool byRequester, DateTime now)
+        Guid authorId, string body, CommentVisibility visibility, bool byRequester, DateTime now, SlaResume? sla = null)
     {
         EnsureStatus(
             visibility == CommentVisibility.Internal ? TicketAction.InternalNote : TicketAction.Comment,
@@ -233,11 +241,24 @@ public class Ticket : FullAuditedAggregateRoot<Guid>
 
         if (byRequester && Status == TicketStatus.Waiting)
         {
-            WaitingNote = null;
+            EndWait(sla);
             Transition(TicketStatus.Open, authorId, now, "Requester replied");
         }
 
         return comment;
+    }
+
+    /// <summary>Leaves the waiting state and, when the manager measured the pause, moves the SLA targets by it.</summary>
+    private void EndWait(SlaResume? sla)
+    {
+        WaitingNote = null;
+        WaitingSince = null;
+        if (sla is { } resume)
+        {
+            PausedBusinessHours = resume.PausedBusinessHours;
+            FirstResponseDueAt = resume.FirstResponseDueAt;
+            ResolutionDueAt = resume.ResolutionDueAt;
+        }
     }
 
     private void Close(CloseReason reason, Guid? actorId, DateTime now)

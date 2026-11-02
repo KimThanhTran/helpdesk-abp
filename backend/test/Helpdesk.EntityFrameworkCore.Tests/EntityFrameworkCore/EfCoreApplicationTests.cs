@@ -1,8 +1,10 @@
 using Helpdesk.Categories;
 using Helpdesk.Integrations;
+using Helpdesk.Notifications;
 using Helpdesk.Reports;
 using Helpdesk.Security;
 using Helpdesk.Tickets;
+using Helpdesk.Triage;
 using Xunit;
 
 namespace Helpdesk.EntityFrameworkCore;
@@ -43,5 +45,20 @@ public class EfCoreSheetsExportTests : SheetsExportTests<HelpdeskEntityFramework
 
 [Collection(HelpdeskTestConsts.CollectionDefinitionName)]
 public class EfCoreRolePermissionTests : RolePermissionTests<HelpdeskEntityFrameworkCoreTestModule>
+{
+}
+
+[Collection(HelpdeskTestConsts.CollectionDefinitionName)]
+public class EfCoreTicketSlaPauseTests : TicketSlaPauseTests<HelpdeskEntityFrameworkCoreTestModule>
+{
+}
+
+[Collection(HelpdeskTestConsts.CollectionDefinitionName)]
+public class EfCoreNotificationTests : NotificationTests<HelpdeskEntityFrameworkCoreTestModule>
+{
+}
+
+[Collection(HelpdeskTestConsts.CollectionDefinitionName)]
+public class EfCoreTicketTriageTests : TicketTriageTests<HelpdeskEntityFrameworkCoreTestModule>
 {
 }

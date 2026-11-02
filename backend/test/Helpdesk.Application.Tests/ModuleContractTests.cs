@@ -22,7 +22,7 @@ public class ModuleContractTests
     public void The_module_has_the_application_services_we_expect()
     {
         AppServices.Select(type => type.Name).ShouldBe(
-            new[] { "CategoryAppService", "TicketAppService", "TicketReportAppService" }, ignoreOrder: true);
+            new[] { "CategoryAppService", "TicketAppService", "TicketReportAppService", "TicketTriageAppService" }, ignoreOrder: true);
     }
 
     [Fact]

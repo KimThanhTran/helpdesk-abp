@@ -12,13 +12,17 @@ public class TicketChangedEventData
 
     public TicketEventKind Kind { get; set; }
 
+    /// <summary>Who made the change. Null when the system did (the automatic close).</summary>
+    public Guid? ActorId { get; set; }
+
     public TicketChangedEventData()
     {
     }
 
-    public TicketChangedEventData(Guid ticketId, TicketEventKind kind)
+    public TicketChangedEventData(Guid ticketId, TicketEventKind kind, Guid? actorId = null)
     {
         TicketId = ticketId;
         Kind = kind;
+        ActorId = actorId;
     }
 }

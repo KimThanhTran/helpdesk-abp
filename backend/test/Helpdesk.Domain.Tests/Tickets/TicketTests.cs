@@ -150,6 +150,68 @@ public class TicketTests
     }
 
     [Fact]
+    public void Waiting_remembers_when_it_started_and_resuming_forgets_it()
+    {
+        var ticket = InStatus(TicketStatus.Waiting); // waiting since T0 + 2h
+
+        ticket.WaitingSince.ShouldBe(T0.AddHours(2));
+
+        ticket.Resume(Agent, T0.AddHours(5));
+
+        ticket.WaitingSince.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Resuming_with_a_measured_pause_moves_both_targets_and_keeps_the_total()
+    {
+        var ticket = InStatus(TicketStatus.Waiting);
+
+        ticket.Resume(Agent, T0.AddHours(5), new SlaResume(3, T0.AddHours(11), T0.AddHours(43)));
+
+        ticket.PausedBusinessHours.ShouldBe(3);
+        ticket.FirstResponseDueAt.ShouldBe(T0.AddHours(11));
+        ticket.ResolutionDueAt.ShouldBe(T0.AddHours(43));
+    }
+
+    [Fact]
+    public void A_requester_reply_that_resumes_the_ticket_also_applies_the_measured_pause()
+    {
+        var ticket = InStatus(TicketStatus.Waiting);
+
+        ticket.AddComment(Requester, "It is a LaserJet", CommentVisibility.Public, byRequester: true, T0.AddHours(5),
+            new SlaResume(2, T0.AddHours(10), T0.AddHours(42)));
+
+        ticket.Status.ShouldBe(TicketStatus.Open);
+        ticket.PausedBusinessHours.ShouldBe(2);
+        ticket.ResolutionDueAt.ShouldBe(T0.AddHours(42));
+        ticket.WaitingSince.ShouldBeNull();
+    }
+
+    [Fact]
+    public void An_agent_comment_never_applies_a_pause_because_it_does_not_resume_the_ticket()
+    {
+        var ticket = InStatus(TicketStatus.Waiting);
+
+        ticket.AddComment(Agent, "Reminder", CommentVisibility.Public, byRequester: false, T0.AddHours(5),
+            new SlaResume(9, T0.AddHours(99), T0.AddHours(99)));
+
+        ticket.Status.ShouldBe(TicketStatus.Waiting);
+        ticket.PausedBusinessHours.ShouldBe(0);
+        ticket.WaitingSince.ShouldBe(T0.AddHours(2));
+    }
+
+    [Fact]
+    public void Resuming_without_a_measurement_leaves_the_targets_alone()
+    {
+        var ticket = InStatus(TicketStatus.Waiting);
+
+        ticket.Resume(Agent, T0.AddHours(5));
+
+        ticket.ResolutionDueAt.ShouldBe(T0.AddHours(40));
+        ticket.PausedBusinessHours.ShouldBe(0);
+    }
+
+    [Fact]
     public void Resuming_clears_the_waiting_note()
     {
         var ticket = InStatus(TicketStatus.Waiting);

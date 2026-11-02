@@ -103,6 +103,7 @@ public class HelpdeskDbContext :
             b.Property(x => x.Description).IsRequired().HasMaxLength(TicketConsts.MaxDescriptionLength);
             b.Property(x => x.WaitingNote).HasMaxLength(TicketConsts.MaxReasonLength);
             b.Property(x => x.Resolution).HasMaxLength(TicketConsts.MaxCommentLength);
+            b.Property(x => x.PausedBusinessHours).HasDefaultValue(0d);
 
             // Tickets reference people and categories by id only, with no navigation: a navigation would make
             // ABP bump the category's concurrency stamp on every new ticket and break concurrent creation.

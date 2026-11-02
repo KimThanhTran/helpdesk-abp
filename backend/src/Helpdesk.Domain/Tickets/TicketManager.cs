@@ -57,8 +57,38 @@ public class TicketManager : DomainService
     public void ChangePriority(Ticket ticket, TicketPriority priority, Guid actorId)
     {
         var now = Clock.Now;
-        var (firstResponseDue, resolutionDue) = Targets(priority, ticket.CreationTime);
+        var (firstResponseDue, resolutionDue) = Targets(priority, ticket.CreationTime, ticket.PausedBusinessHours);
         ticket.ChangePriority(priority, firstResponseDue, resolutionDue, actorId, now);
+    }
+
+    public void Resume(Ticket ticket, Guid actorId) =>
+        ticket.Resume(actorId, Clock.Now, MeasurePause(ticket));
+
+    /// <summary>Adds a comment. A requester's reply on a waiting ticket resumes it, and the pause is measured.</summary>
+    public TicketComment AddComment(
+        Ticket ticket, Guid authorId, string body, CommentVisibility visibility, bool byRequester)
+    {
+        var now = Clock.Now;
+        var sla = byRequester ? MeasurePause(ticket) : null;
+        return ticket.AddComment(authorId, body, visibility, byRequester, now, sla);
+    }
+
+    /// <summary>
+    /// The targets once a wait ends now. While a ticket waits for the requester the clock is stopped:
+    /// the working hours between the start of the wait and now are added to both targets.
+    /// </summary>
+    private SlaResume? MeasurePause(Ticket ticket)
+    {
+        if (ticket.Status != TicketStatus.Waiting || ticket.WaitingSince is not { } since)
+        {
+            return null;
+        }
+
+        var paused = ticket.PausedBusinessHours + _calendar.BusinessHoursBetween(since, Clock.Now);
+        var (firstResponseDue, resolutionDue) = Targets(ticket.Priority, ticket.CreationTime, paused);
+        // an answered ticket keeps its first-response target: that clock already stopped
+        return new SlaResume(
+            paused, ticket.FirstRespondedAt is null ? firstResponseDue : ticket.FirstResponseDueAt, resolutionDue);
     }
 
     /// <summary>Closes every resolved ticket that has waited long enough for an answer. Returns the tickets closed.</summary>
@@ -78,11 +108,12 @@ public class TicketManager : DomainService
         return closed;
     }
 
-    private (DateTime FirstResponseDue, DateTime ResolutionDue) Targets(TicketPriority priority, DateTime from)
+    private (DateTime FirstResponseDue, DateTime ResolutionDue) Targets(
+        TicketPriority priority, DateTime from, double pausedHours = 0)
     {
         var targets = SlaPolicy.For(priority);
         return (
-            _calendar.AddBusinessHours(from, targets.FirstResponseHours),
-            _calendar.AddBusinessHours(from, targets.ResolutionHours));
+            _calendar.AddBusinessHours(from, targets.FirstResponseHours + pausedHours),
+            _calendar.AddBusinessHours(from, targets.ResolutionHours + pausedHours));
     }
 }

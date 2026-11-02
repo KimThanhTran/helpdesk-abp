@@ -14,6 +14,9 @@ public class HelpdeskOptions
     /// <summary>Create demo roles, users and categories on startup. Never enable in production.</summary>
     public bool SeedDemoData { get; set; }
 
+    /// <summary>With the demo data, also create a dozen finished tickets so the suggestions have history to learn from.</summary>
+    public bool SeedDemoTickets { get; set; }
+
     public SheetsOptions Sheets { get; set; } = new();
 }
 

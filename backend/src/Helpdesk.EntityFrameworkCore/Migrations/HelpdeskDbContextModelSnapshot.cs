@@ -175,6 +175,11 @@ namespace Helpdesk.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<double>("PausedBusinessHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.0);
+
                     b.Property<int>("Priority")
                         .HasColumnType("integer");
 
@@ -205,6 +210,9 @@ namespace Helpdesk.Migrations
                     b.Property<string>("WaitingNote")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("WaitingSince")
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -2303,7 +2311,7 @@ namespace Helpdesk.Migrations
 
                             b1.HasKey("IdentityUserPasskeyCredentialId");
 
-                            b1.ToTable("AbpUserPasskeys", (string)null);
+                            b1.ToTable("AbpUserPasskeys");
 
                             b1
                                 .ToJson("Data")
