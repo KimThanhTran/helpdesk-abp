@@ -78,13 +78,7 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
         var userId = CurrentUser.GetId();
         var query = ApplyFilters(await _tickets.GetQueryableAsync(), input);
 
-        query = input.Scope switch
-        {
-            QueueScope.Unassigned => query.Where(ticket => ticket.Status == TicketStatus.New),
-            QueueScope.Mine => query.Where(ticket => ticket.AssigneeId == userId
-                && ticket.Status != TicketStatus.Closed && ticket.Status != TicketStatus.Cancelled),
-            _ => query,
-        };
+        query = TicketQueries.InScope(query, input.Scope, userId);
 
         return await ToPagedAsync(query, input, queueOrder: true);
     }
@@ -218,31 +212,8 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
 
     // ---------------------------------------------------------------- lists
 
-    private static IQueryable<Ticket> ApplyFilters(IQueryable<Ticket> query, GetTicketListInput input)
-    {
-        var text = input.Filter?.Trim().ToLowerInvariant();
-        if (!string.IsNullOrEmpty(text))
-        {
-            query = query.Where(ticket => ticket.Code.ToLower().Contains(text) || ticket.Title.ToLower().Contains(text));
-        }
-
-        if (input.Status is { } status)
-        {
-            query = query.Where(ticket => ticket.Status == status);
-        }
-
-        if (input.Priority is { } priority)
-        {
-            query = query.Where(ticket => ticket.Priority == priority);
-        }
-
-        if (input.CategoryId is { } categoryId)
-        {
-            query = query.Where(ticket => ticket.CategoryId == categoryId);
-        }
-
-        return query;
-    }
+    private static IQueryable<Ticket> ApplyFilters(IQueryable<Ticket> query, GetTicketListInput input) =>
+        TicketQueries.Filter(query, input.Filter, input.Status, input.Priority, input.CategoryId);
 
     /// <summary>Only whitelisted columns can be sorted on, so the caller never controls the query text.</summary>
     private static IQueryable<Ticket> ApplySorting(IQueryable<Ticket> query, string? sorting, bool queueOrder)

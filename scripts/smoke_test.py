@@ -9,10 +9,14 @@ Exits with a non-zero status if any check fails.
 If SHEETS_DUMP_URL is set (the URL of integrations/google-sheets/local-server.js /dump, with the API pointed at
 it and IncludeTitle/IncludePeople on), it also checks that the ticket reached the Google Sheet intact.
 """
+import io
 import json
 import os
+import struct
 import sys
 import time
+import zipfile
+import zlib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -49,6 +53,48 @@ def call(method, path, token=None, body=None, form=None, extra_headers=None):
             return error.code, json.loads(raw) if raw else None
         except ValueError:
             return error.code, None
+
+
+def raw(method, path, token=None, data=None, headers=None):
+    """Returns (status, response headers, body bytes); for files, where call() would try to parse JSON."""
+    sent = {**({"Authorization": f"Bearer {token}"} if token else {}), **(headers or {})}
+    request = urllib.request.Request(BASE + path, data=data, headers=sent, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.status, response.headers, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.headers, error.read()
+
+
+def upload(ticket_id, token, filename, content, visibility=1):
+    """POST /api/app/ticket-attachment/upload/{id} as multipart/form-data; returns (status, parsed json)."""
+    boundary = "----smoke" + str(int(time.time() * 1000))
+    head = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            "Content-Type: image/png\r\n\r\n").encode()
+    body = head + content + f"\r\n--{boundary}--\r\n".encode()
+    status, _, payload = raw("POST", f"/api/app/ticket-attachment/upload/{ticket_id}?visibility={visibility}", token, body,
+                             {"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    try:
+        return status, json.loads(payload) if payload else None
+    except ValueError:
+        return status, None
+
+
+def png_bytes(extra=0):
+    """A real 8x8 red PNG; `extra` pads it with an ancillary text chunk to reach a size."""
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+    pixels = b"".join(b"\x00" + b"\xff\x00\x00" * 8 for _ in range(8))
+    padding = chunk(b"tEXt", b"pad\x00" + b"x" * extra) if extra else b""
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 8, 8, 8, 2, 0, 0, 0)) + padding
+            + chunk(b"IDAT", zlib.compress(pixels)) + chunk(b"IEND", b""))
+
+
+def sheet_text(xlsx_bytes, part="xl/worksheets/sheet1.xml"):
+    """The XML of one sheet of an .xlsx (the files here use inline strings, so the text is in it)."""
+    with zipfile.ZipFile(io.BytesIO(xlsx_bytes)) as archive:
+        assert archive.testzip() is None
+        return archive.read(part).decode("utf-8")
 
 
 def check(name, condition, detail=""):
@@ -175,6 +221,51 @@ def main():
     expect("comments on a closed ticket are a conflict", call("POST", f"/api/app/ticket/{tid}/comment", alice, {"body": "More"}), 409)
     check("history tells the story", [e["toStatus"] for e in closed["events"]] == [NEW, OPEN, WAITING, OPEN, RESOLVED, CLOSED],
           str([e["toStatus"] for e in closed["events"]]))
+
+    print("\nImage attachments")
+    shot = expect("alice opens a ticket for the attachments", call("POST", "/api/app/ticket", alice, body), 200)["id"]
+    png = png_bytes()
+    status, saved = upload(shot, alice, "screen.png", png)
+    check("alice attaches a PNG", status == 200 and saved["contentType"] == "image/png" and saved["size"] == len(png), str(status))
+    status, rejected = upload(shot, alice, "photo.png", b"<html><script>alert(1)</script></html>")
+    check("a script renamed to .png is refused with 415", status == 415 and rejected["error"]["code"] == "Helpdesk:Attachment:BadType", str(status))
+    status, _ = upload(shot, alice, "x.png", png, visibility=2)
+    check("a requester cannot add an internal attachment (403)", status == 403, str(status))
+    status, internal = upload(shot, agent, "internal.png", png, visibility=2)
+    check("the agent adds an internal attachment", status == 200, str(status))
+    seen_by_alice = expect("alice lists the attachments", call("GET", f"/api/app/ticket-attachment?ticketId={shot}", alice), 200)["items"]
+    seen_by_agent = expect("the agent lists the attachments", call("GET", f"/api/app/ticket-attachment?ticketId={shot}", agent), 200)["items"]
+    check("alice sees only the public one, the agent sees both", len(seen_by_alice) == 1 and len(seen_by_agent) == 2, f"{len(seen_by_alice)}/{len(seen_by_agent)}")
+    status, headers, content = raw("GET", f"/api/app/ticket-attachment/{saved['id']}/content", alice)
+    check("alice downloads the same bytes with the detected type and nosniff",
+          status == 200 and content == png and headers["Content-Type"] == "image/png" and headers["X-Content-Type-Options"] == "nosniff", str(status))
+    check("the download is an attachment, not rendered inline", "attachment" in (headers["Content-Disposition"] or ""))
+    check("alice cannot open the internal file (404)", raw("GET", f"/api/app/ticket-attachment/{internal['id']}/content", alice)[0] == 404)
+    check("bob can neither list nor open alice's files (404)",
+          raw("GET", f"/api/app/ticket-attachment?ticketId={shot}", bob)[0] == 404
+          and raw("GET", f"/api/app/ticket-attachment/{saved['id']}/content", bob)[0] == 404)
+    check("anonymous cannot open a file (401)", raw("GET", f"/api/app/ticket-attachment/{saved['id']}/content")[0] == 401)
+    for _ in range(3):
+        upload(shot, alice, "more.png", png)
+    status, limit = upload(shot, alice, "sixth.png", png)
+    check("a sixth image is a conflict", status == 409 and limit["error"]["code"] == "Helpdesk:Attachment:Limit", str(status))
+    big = expect("alice opens another ticket for the size check", call("POST", "/api/app/ticket", alice, body), 200)["id"]
+    status, _ = upload(big, alice, "huge.png", png_bytes(5 * 1024 * 1024))
+    check("an image over 5 MB is refused with 413", status == 413, str(status))
+
+    print("\nExcel export")
+    status, headers, workbook = raw("GET", "/api/app/ticket-export/tickets?Filter=Printer", agent)
+    check("the agent downloads the tickets as .xlsx",
+          status == 200 and headers["Content-Type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), str(status))
+    check("it is a valid zip with the ticket in it and no formulas", "Printer jams" in sheet_text(workbook) and "<f>" not in sheet_text(workbook))
+    check("the file has a dated name", ".xlsx" in (headers["Content-Disposition"] or ""))
+    empty = raw("GET", "/api/app/ticket-export/tickets?Filter=zzzzzz", agent)[2]
+    check("a filter that matches nothing leaves only the header row", "Printer jams" not in sheet_text(empty))
+    check("a requester cannot export (403)", raw("GET", "/api/app/ticket-export/tickets", alice)[0] == 403)
+    check("anonymous cannot export (401)", raw("GET", "/api/app/ticket-export/tickets")[0] == 401)
+    status, headers, report = raw("GET", "/api/app/ticket-export/summary", agent)
+    check("the agent downloads the report as .xlsx with four sheets",
+          status == 200 and "Tickets created" in sheet_text(report) and "xl/worksheets/sheet4.xml" in zipfile.ZipFile(io.BytesIO(report)).namelist(), str(status))
 
     print("\nLists and reports")
     mine = expect("alice's tickets", call("GET", "/api/app/ticket/my-list", alice), 200)

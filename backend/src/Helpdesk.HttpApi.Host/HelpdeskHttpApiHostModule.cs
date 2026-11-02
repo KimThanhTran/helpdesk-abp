@@ -93,6 +93,10 @@ public class HelpdeskHttpApiHostModule : AbpModule
             options.Map(HelpdeskDomainErrorCodes.ReasonRequired, HttpStatusCode.BadRequest);
             options.Map(HelpdeskDomainErrorCodes.CategoryInactive, HttpStatusCode.BadRequest);
             options.Map(HelpdeskDomainErrorCodes.AssigneeNotAgent, HttpStatusCode.BadRequest);
+            options.Map(HelpdeskDomainErrorCodes.AttachmentEmpty, HttpStatusCode.BadRequest);
+            options.Map(HelpdeskDomainErrorCodes.AttachmentBadType, HttpStatusCode.UnsupportedMediaType);
+            options.Map(HelpdeskDomainErrorCodes.AttachmentTooLarge, HttpStatusCode.RequestEntityTooLarge);
+            options.Map(HelpdeskDomainErrorCodes.AttachmentLimit, HttpStatusCode.Conflict);
         });
         // This host is an API: it serves no pages of its own, so there are no client-side libraries to check for.
         Configure<AbpMvcLibsOptions>(options => options.CheckLibs = false);
@@ -269,6 +273,13 @@ public class HelpdeskHttpApiHostModule : AbpModule
         // which this API does not serve. Clients get the plain status code and ABP's JSON error body.
 
         app.UseCorrelationId();
+
+        // Uploaded images are served back with the type we detected; stop browsers from second-guessing it.
+        app.Use(async (httpContext, next) =>
+        {
+            httpContext.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            await next();
+        });
         app.MapAbpStaticAssets();
         app.UseRouting();
         app.UseCors();

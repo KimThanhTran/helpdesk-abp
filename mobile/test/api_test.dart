@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:helpdesk_mobile/api.dart';
@@ -29,6 +30,8 @@ const ticketJson = {
 };
 
 void main() {
+  attachmentTests();
+
   test('parseUtc reads a time without a zone as UTC', () {
     expect(parseUtc('2026-11-02T08:00:00').toUtc(), DateTime.utc(2026, 11, 2, 8));
     expect(parseUtc('2026-11-02T15:00:00+07:00').toUtc(), DateTime.utc(2026, 11, 2, 8));
@@ -115,6 +118,81 @@ void main() {
     test('a network failure becomes a readable message', () async {
       final api = ApiClient(client: MockClient((_) async => throw http.ClientException('refused')));
       expect(api.myTickets(), throwsA(isA<ApiException>().having((e) => e.status, 'status', 0)));
+    });
+  });
+}
+
+void attachmentTests() {
+  group('attachments', () {
+    test('attachmentProblem refuses what the server would refuse', () {
+      expect(attachmentProblem('a.png', 100, 0), isNull);
+      expect(attachmentProblem('A.JPG', 100, 4), isNull);
+      expect(attachmentProblem('a.webp', maxAttachmentBytes, 0), isNull);
+      expect(attachmentProblem('a.gif', 100, 0), contains('Only PNG, JPEG and WebP'));
+      expect(attachmentProblem('noextension', 100, 0), contains('Only PNG, JPEG and WebP'));
+      expect(attachmentProblem('a.png', 0, 0), contains('empty'));
+      expect(attachmentProblem('a.png', maxAttachmentBytes + 1, 0), contains('too large'));
+      expect(attachmentProblem('a.png', 100, maxAttachments), contains('at most'));
+    });
+
+    test('an upload is a multipart POST with the token, the ticket id and the file name', () async {
+      http.BaseRequest? seen;
+      String? body;
+      final api = ApiClient(
+        baseUrl: 'http://api',
+        client: MockClient((request) async {
+          if (request.url.path == '/connect/token') return json(200, {'access_token': 'tok'});
+          seen = request;
+          body = request.body;
+          return json(200, {
+            'id': 'a1', 'fileName': 'shot.png', 'size': 3, 'visibility': 1, 'uploader': {'id': 'u', 'name': 'alice'},
+          });
+        }),
+      );
+      await api.signIn('alice', 'pw');
+
+      final saved = await api.uploadAttachment('t1', 'shot.png', Uint8List.fromList([1, 2, 3]));
+
+      expect(saved.fileName, 'shot.png');
+      expect(seen!.method, 'POST');
+      expect(seen!.url.path, '/api/app/ticket-attachment/upload/t1');
+      expect(seen!.url.queryParameters['visibility'], '1');
+      expect(seen!.headers['Authorization'], 'Bearer tok');
+      expect(seen!.headers['content-type'], startsWith('multipart/form-data'));
+      expect(body, contains('name="file"'));
+      expect(body, contains('filename="shot.png"'));
+    });
+
+    test('the list and the bytes come from their own routes', () async {
+      final api = ApiClient(client: MockClient((request) async {
+        if (request.url.path == '/api/app/ticket-attachment') {
+          expect(request.url.queryParameters['ticketId'], 't1');
+          return json(200, {
+            'items': [
+              {'id': 'a1', 'fileName': 'x.png', 'size': 10, 'visibility': 2, 'uploader': {'id': 'u', 'name': 'agent1'}},
+            ]
+          });
+        }
+        return http.Response.bytes([9, 8, 7], 200, headers: {'content-type': 'image/png'});
+      }));
+
+      final list = await api.attachments('t1');
+      expect(list.single.internal, isTrue);
+      expect(list.single.uploader, 'agent1');
+      expect(await api.attachmentBytes('a1'), [9, 8, 7]);
+    });
+
+    test('a refused file reports the server message, and a missing image is an error, not empty bytes', () async {
+      final refusing = ApiClient(client: MockClient((_) async => json(415, {
+            'error': {'message': 'Only PNG, JPEG and WebP images can be attached.'}
+          })));
+      await expectLater(
+        refusing.uploadAttachment('t1', 'x.png', Uint8List.fromList([1])),
+        throwsA(isA<ApiException>().having((e) => e.status, 'status', 415).having((e) => e.message, 'message', contains('Only PNG'))),
+      );
+
+      final missing = ApiClient(client: MockClient((_) async => json(404, {'error': {'message': 'Not found'}})));
+      await expectLater(missing.attachmentBytes('nope'), throwsA(isA<ApiException>().having((e) => e.status, 'status', 404)));
     });
   });
 }

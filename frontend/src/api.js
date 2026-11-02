@@ -39,7 +39,20 @@ async function readError(response) {
   }
 }
 
-async function request(method, path, { params, body, signal } = {}) {
+/** The file name a download suggests: filename*=UTF-8''name.xlsx wins over filename=name.xlsx. */
+function fileNameOf(response, fallback) {
+  const header = response.headers.get('Content-Disposition') ?? '';
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encoded) return decodeURIComponent(encoded[1]);
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  return plain ? plain[1] : fallback;
+}
+
+/**
+ * `body` is sent as JSON, `form` (a FormData) as multipart, and `blob: fallbackName` asks for a file back
+ * instead of JSON: it resolves to { blob, filename }.
+ */
+async function request(method, path, { params, body, form, signal, blob } = {}) {
   let response;
   try {
     response = await fetch(`${API_URL}${path}${query(params)}`, {
@@ -47,9 +60,10 @@ async function request(method, path, { params, body, signal } = {}) {
       signal,
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // for a FormData the browser adds the Content-Type itself, with the multipart boundary
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: form ?? (body ? JSON.stringify(body) : undefined),
     });
   } catch (error) {
     if (error.name === 'AbortError') throw error;
@@ -64,6 +78,7 @@ async function request(method, path, { params, body, signal } = {}) {
     const { message, code } = await readError(response);
     throw new ApiError(response.status, message, code);
   }
+  if (blob) return { blob: await response.blob(), filename: fileNameOf(response, blob) };
   return response.status === 204 ? null : response.json().catch(() => null);
 }
 
@@ -102,6 +117,15 @@ export const api = {
   queue: (params, signal) => request('GET', '/api/app/ticket/queue', { params, signal }),
   agents: (signal) => request('GET', '/api/app/ticket/assignable-agents', { signal }),
   comment: (id, body) => request('POST', `/api/app/ticket/${id}/comment`, { body }),
+  attachments: (ticketId, signal) => request('GET', '/api/app/ticket-attachment', { params: { ticketId }, signal }),
+  uploadAttachment: (ticketId, file, internal = false) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request('POST', `/api/app/ticket-attachment/upload/${ticketId}`, { params: { visibility: internal ? 2 : 1 }, form });
+  },
+  attachmentImage: (id, signal) => request('GET', `/api/app/ticket-attachment/${id}/content`, { signal, blob: 'image' }),
+  exportTickets: (params) => request('GET', '/api/app/ticket-export/tickets', { params, blob: 'helpdesk-tickets.xlsx' }),
+  exportSummary: () => request('GET', '/api/app/ticket-export/summary', { blob: 'helpdesk-report.xlsx' }),
   suggestion: (params, signal) => request('GET', '/api/app/ticket-triage/suggestion', { params, signal }),
   summary: (params, signal) => request('GET', '/api/app/ticket-report/summary', { params, signal }),
   /** Runs one of the ticket actions (claim, resolve...). `value` is the text or id the action asks for. */

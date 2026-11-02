@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'api.dart';
@@ -7,6 +9,23 @@ import 'api.dart';
 String formatTime(DateTime time) {
   String two(int n) => n.toString().padLeft(2, '0');
   return '${time.year}-${two(time.month)}-${two(time.day)} ${two(time.hour)}:${two(time.minute)}';
+}
+
+/// An image the person chose. The bytes are read only after the size has passed the check.
+class PickedImage {
+  PickedImage(this.name, this.size, this.read);
+  final String name;
+  final int size;
+  final Future<Uint8List> Function() read;
+}
+
+typedef PickImage = Future<PickedImage?> Function();
+
+/// The system file chooser, limited to images.
+Future<PickedImage?> pickImageFile() async {
+  final file = await FilePicker.pickFile(type: FileType.image);
+  if (file == null) return null;
+  return PickedImage(file.name, await file.length() ?? 0, file.readAsBytes);
 }
 
 /// Shows an error under a form; empty when there is none.
@@ -93,8 +112,9 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 class TicketsPage extends StatefulWidget {
-  const TicketsPage({super.key, required this.api, required this.onSignOut});
+  const TicketsPage({super.key, required this.api, required this.onSignOut, this.pickImage = pickImageFile});
   final ApiClient api;
+  final PickImage pickImage;
   final VoidCallback onSignOut;
 
   @override
@@ -148,7 +168,7 @@ class _TicketsPageState extends State<TicketsPage> {
                   title: Text('${ticket.code}  ${ticket.title}', maxLines: 2, overflow: TextOverflow.ellipsis),
                   subtitle: Text('${ticket.statusName} · ${ticket.priorityName} · ${ticket.category}'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _open(TicketPage(api: widget.api, id: ticket.id)),
+                  onTap: () => _open(TicketPage(api: widget.api, id: ticket.id, pickImage: widget.pickImage)),
                 );
               },
             );
@@ -266,9 +286,10 @@ class _NewTicketPageState extends State<NewTicketPage> {
 }
 
 class TicketPage extends StatefulWidget {
-  const TicketPage({super.key, required this.api, required this.id});
+  const TicketPage({super.key, required this.api, required this.id, this.pickImage = pickImageFile});
   final ApiClient api;
   final String id;
+  final PickImage pickImage;
 
   @override
   State<TicketPage> createState() => _TicketPageState();
@@ -276,6 +297,7 @@ class TicketPage extends StatefulWidget {
 
 class _TicketPageState extends State<TicketPage> {
   late Future<Ticket> _ticket = widget.api.ticket(widget.id);
+  late Future<List<Attachment>> _images = widget.api.attachments(widget.id);
   final _comment = TextEditingController();
   String? _error;
   bool _busy = false;
@@ -283,6 +305,20 @@ class _TicketPageState extends State<TicketPage> {
   void _reload() {
     setState(() {
       _ticket = widget.api.ticket(widget.id);
+      _images = widget.api.attachments(widget.id);
+    });
+  }
+
+  Future<void> _addImage(int alreadyAttached) async {
+    final picked = await widget.pickImage();
+    if (picked == null) return;
+    final problem = attachmentProblem(picked.name, picked.size, alreadyAttached);
+    if (problem != null) {
+      setState(() => _error = problem);
+      return;
+    }
+    await _run(() async {
+      await widget.api.uploadAttachment(widget.id, picked.name, await picked.read());
     });
   }
 
@@ -371,6 +407,29 @@ class _TicketPageState extends State<TicketPage> {
             ]),
             ErrorText(_error),
             const Divider(height: 32),
+            Text('Images', style: textTheme.titleMedium),
+            FutureBuilder<List<Attachment>>(
+              future: _images,
+              builder: (context, images) {
+                final items = images.data ?? const <Attachment>[];
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (images.hasError) ErrorText('${images.error}'),
+                  if (images.connectionState == ConnectionState.done && items.isEmpty)
+                    const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No images yet.')),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final item in items) AttachmentTile(key: Key('attachment-${item.id}'), api: widget.api, attachment: item),
+                  ]),
+                  if (ticket.can(commentAction))
+                    TextButton.icon(
+                      key: const Key('add-image'),
+                      onPressed: _busy || items.length >= maxAttachments ? null : () => _addImage(items.length),
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                      label: const Text('Add an image'),
+                    ),
+                ]);
+              },
+            ),
+            const Divider(height: 32),
             Text('Conversation', style: textTheme.titleMedium),
             if (ticket.comments.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No comments yet.')),
             for (final comment in ticket.comments)
@@ -390,6 +449,50 @@ class _TicketPageState extends State<TicketPage> {
           ]);
         },
       ),
+    );
+  }
+}
+
+/// One image, loaded with the sign-in token (a plain network image cannot send it) and shown from memory.
+class AttachmentTile extends StatefulWidget {
+  const AttachmentTile({super.key, required this.api, required this.attachment});
+  final ApiClient api;
+  final Attachment attachment;
+
+  @override
+  State<AttachmentTile> createState() => _AttachmentTileState();
+}
+
+class _AttachmentTileState extends State<AttachmentTile> {
+  late final Future<Uint8List> _bytes = widget.api.attachmentBytes(widget.attachment.id);
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.attachment;
+    return SizedBox(
+      width: 120,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(
+          height: 90,
+          width: 120,
+          child: FutureBuilder<Uint8List>(
+            future: _bytes,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) return const Center(child: Icon(Icons.broken_image_outlined));
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+              return InkWell(
+                onTap: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => Dialog(child: InteractiveViewer(child: Image.memory(snapshot.data!, errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined)))),
+                ),
+                child: Image.memory(snapshot.data!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined)),
+              );
+            },
+          ),
+        ),
+        Text(item.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+        Text('${item.uploader}${item.internal ? ' · internal' : ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+      ]),
     );
   }
 }

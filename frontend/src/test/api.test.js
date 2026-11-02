@@ -90,3 +90,55 @@ describe('signIn', () => {
     await expect(signIn('alice', 'no')).rejects.toMatchObject({ message: 'Invalid username or password!' });
   });
 });
+
+describe('attachments and files', () => {
+  it('uploads as multipart without forcing a JSON content type, and marks internal ones', async () => {
+    setToken('abc');
+    fetchMock.mockResolvedValue(reply(200, { id: 'a1' }));
+    const file = new File([new Uint8Array(4)], 'shot.png', { type: 'image/png' });
+
+    await api.uploadAttachment('t1', file);
+    await api.uploadAttachment('t1', file, true);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/app/ticket-attachment/upload/t1?visibility=1');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    expect(init.body.get('file').name).toBe('shot.png');
+    expect(init.headers['Content-Type']).toBeUndefined(); // the browser adds it, with the boundary
+    expect(init.headers.Authorization).toBe('Bearer abc');
+    expect(fetchMock.mock.calls[1][0]).toContain('visibility=2');
+  });
+
+  it('lists the attachments of one ticket', async () => {
+    fetchMock.mockResolvedValue(reply(200, { items: [] }));
+    await api.attachments('t1');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/app/ticket-attachment?ticketId=t1');
+  });
+
+  it('returns a file with the name the server suggests', async () => {
+    fetchMock.mockResolvedValue(new Response('xlsx-bytes', {
+      status: 200,
+      headers: { 'Content-Disposition': "attachment; filename=helpdesk-tickets-2026-11-02.xlsx; filename*=UTF-8''helpdesk-tickets-2026-11-02.xlsx" },
+    }));
+
+    const { blob, filename } = await api.exportTickets({ scope: 3, filter: '', status: '2' });
+
+    expect(filename).toBe('helpdesk-tickets-2026-11-02.xlsx');
+    expect(blob.size).toBe('xlsx-bytes'.length);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/app/ticket-export/tickets?scope=3&status=2');
+  });
+
+  it('falls back to a default name and decodes an encoded one', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('x', { status: 200 }));
+    expect((await api.exportSummary()).filename).toBe('helpdesk-report.xlsx');
+
+    fetchMock.mockResolvedValueOnce(new Response('x', { status: 200, headers: { 'Content-Disposition': "attachment; filename*=UTF-8''b%C3%A1o%20c%C3%A1o.xlsx" } }));
+    expect((await api.exportSummary()).filename).toBe('báo cáo.xlsx');
+  });
+
+  it('reports a refused export in the server words', async () => {
+    fetchMock.mockResolvedValue(reply(403, { error: { message: 'Your role does not allow this.' } }));
+    await expect(api.exportTickets({})).rejects.toMatchObject({ status: 403, message: 'Your role does not allow this.' });
+  });
+});

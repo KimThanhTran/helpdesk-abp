@@ -6,9 +6,12 @@ import 'pages.dart';
 void main() => runApp(HelpdeskApp(api: ApiClient()));
 
 class HelpdeskApp extends StatefulWidget {
-  const HelpdeskApp({super.key, required this.api});
+  const HelpdeskApp({super.key, required this.api, this.pickImage = pickImageFile});
 
   final ApiClient api;
+
+  /// How the person chooses an image to attach; replaced in tests.
+  final PickImage pickImage;
 
   @override
   State<HelpdeskApp> createState() => _HelpdeskAppState();
@@ -41,7 +44,7 @@ class _HelpdeskAppState extends State<HelpdeskApp> {
       theme: ThemeData(colorSchemeSeed: const Color(0xFF3B5BDB), useMaterial3: true),
       darkTheme: ThemeData(colorSchemeSeed: const Color(0xFF3B5BDB), brightness: Brightness.dark, useMaterial3: true),
       home: _signedIn
-          ? TicketsPage(api: widget.api, onSignOut: () => _changed(false))
+          ? TicketsPage(api: widget.api, pickImage: widget.pickImage, onSignOut: () => _changed(false))
           : LoginPage(api: widget.api, onSignedIn: () => _changed(true)),
     );
   }

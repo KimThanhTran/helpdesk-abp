@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -87,6 +88,39 @@ class Ticket {
   bool can(int action) => actions.contains(action);
 }
 
+/// An image on a ticket (no bytes: those come from [ApiClient.attachmentBytes]).
+class Attachment {
+  Attachment(this.id, this.fileName, this.size, this.uploader, this.internal);
+  factory Attachment.fromJson(Map<String, dynamic> json) => Attachment(
+        json['id'] as String,
+        json['fileName'] as String,
+        json['size'] as int,
+        (json['uploader'] as Map<String, dynamic>)['name'] as String,
+        json['visibility'] == 2,
+      );
+  final String id;
+  final String fileName;
+  final int size;
+  final String uploader;
+  final bool internal;
+}
+
+const maxAttachmentBytes = 5 * 1024 * 1024;
+const maxAttachments = 5;
+const _imageExtensions = ['png', 'jpg', 'jpeg', 'webp'];
+
+/// Why this file cannot be attached, or null when it looks fine. The server checks the real content again; this only
+/// saves an upload when the answer is obvious.
+String? attachmentProblem(String name, int size, int alreadyAttached) {
+  if (alreadyAttached >= maxAttachments) return 'A ticket can hold at most $maxAttachments images.';
+  final dot = name.lastIndexOf('.');
+  final extension = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
+  if (!_imageExtensions.contains(extension)) return 'Only PNG, JPEG and WebP images can be attached.';
+  if (size == 0) return 'The file is empty.';
+  if (size > maxAttachmentBytes) return 'The image is too large. The limit is 5 MB.';
+  return null;
+}
+
 class Category {
   Category(this.id, this.name);
   final String id;
@@ -153,6 +187,27 @@ class ApiClient {
   }
 
   Future<Ticket> ticket(String id) async => Ticket.fromJson(await _get('/api/app/ticket/$id'));
+
+  Future<List<Attachment>> attachments(String ticketId) async {
+    final body = await _get('/api/app/ticket-attachment', {'ticketId': ticketId});
+    return [for (final item in body['items'] as List) Attachment.fromJson(item)];
+  }
+
+  Future<Attachment> uploadAttachment(String ticketId, String fileName, Uint8List bytes) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/app/ticket-attachment/upload/$ticketId?visibility=1'))
+      ..headers.addAll(_headers())
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
+    final response = await _send(() async => http.Response.fromStream(await _http.send(request)));
+    return Attachment.fromJson(_checked(response));
+  }
+
+  /// The image itself. It needs the sign-in token, so it cannot be a plain network image.
+  Future<Uint8List> attachmentBytes(String id) async {
+    final response = await _send(() => _http.get(Uri.parse('$baseUrl/api/app/ticket-attachment/$id/content'), headers: _headers()));
+    if (response.statusCode == 200) return response.bodyBytes;
+    _checked(response); // throws with the server's message or the sign-out handling
+    throw ApiException(response.statusCode, 'Cannot load the image.');
+  }
 
   Future<List<Category>> categories() async {
     final body = await _get('/api/app/category', {'ActiveOnly': 'true'});

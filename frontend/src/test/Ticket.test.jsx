@@ -20,6 +20,7 @@ const ticket = (actions, extra = {}) => ({
 function show(user, data) {
   vi.spyOn(auth, 'useAuth').mockReturnValue({ user });
   vi.spyOn(api, 'ticket').mockResolvedValue(data);
+  vi.spyOn(api, 'attachments').mockResolvedValue({ items: [] });
   vi.spyOn(api, 'suggestion').mockResolvedValue({ categories: [], similarTickets: [], suggestedReply: null });
   render(
     <MemoryRouter initialEntries={['/tickets/t1']}>

@@ -147,6 +147,10 @@ public class HelpdeskDataSeedContributor : IDataSeedContributor, ITransientDepen
             var category = await _categories.FirstAsync(candidate => candidate.NormalizedName == Category.Normalize(demo.Category));
 
             var ticket = await _ticketManager.CreateAsync(requester.Id, category.Id, demo.Title, demo.Description, TicketPriority.Normal);
+
+            // Saved first: ABP stamps the creation time on insert, and a change of priority measures its SLA targets
+            // from it. Before the insert it is 0001-01-01, which put every demo deadline in the year 1.
+            await _tickets.InsertAsync(ticket, autoSave: true);
             if (demo.Priority != TicketPriority.Normal)
             {
                 _ticketManager.ChangePriority(ticket, demo.Priority, agent.Id);
@@ -163,7 +167,7 @@ public class HelpdeskDataSeedContributor : IDataSeedContributor, ITransientDepen
                 ticket.Confirm(requester.Id, now);
             }
 
-            await _tickets.InsertAsync(ticket, autoSave: true);
+            await _tickets.UpdateAsync(ticket, autoSave: true);
         }
     }
 

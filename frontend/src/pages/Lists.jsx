@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { ErrorBox, Pager, TicketTable } from '../components/bits';
+import ExportButton from '../components/ExportButton';
 import { Priority, Scope, Status } from '../constants';
 import { useDebounced, useLoad } from '../hooks';
 import { useTicketChanges } from '../notifications';
@@ -68,7 +69,10 @@ export function Queue() {
 
   return (
     <>
-      <h1>Queue</h1>
+      <div className="row">
+        <h1>Queue</h1>
+        <ExportButton fetchFile={() => api.exportTickets({ scope, filter: text, status, priority })} />
+      </div>
       <div className="tabs" role="tablist">
         {SCOPES.map(([name, value]) => (
           <button key={value} type="button" role="tab" aria-selected={scope === value} onClick={() => reset(setScope)(value)}>{name}</button>

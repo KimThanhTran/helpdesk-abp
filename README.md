@@ -24,6 +24,8 @@ The focus of the project is getting the hard parts right and proving it: the tic
 - **Live notifications over SignalR.** Agents hear about every change, everyone else about the tickets they raised. A notification names the ticket and the change, never its description or a comment.
 - **Triage suggestions** from the tickets that already exist (TF-IDF, no external AI service): the likely category while typing, similar tickets, a warning for a probable duplicate and how a similar ticket was solved. Other people's tickets are shown to agents only.
 - **A React web UI** ([frontend](frontend)) and **a Flutter app** for requesters ([mobile](mobile/README.md)). Both show exactly the buttons the API lists in `actions`.
+- **Images on tickets.** PNG, JPEG or WebP, up to 5 MB each and five per ticket, on the web UI and in the Flutter app. The type is decided from the file's bytes, never from its name, and a requester can neither see nor learn about an agent's internal images.
+- **Excel export.** An agent downloads the queue (with the filters on screen) or the report as a real `.xlsx` file: frozen bold header, filters, real dates.
 - **Reports:** counts by status, priority and category, average time to resolve, and what is overdue right now.
 - **Google Sheets export** through a Google Apps Script, signed and privacy-first. See [integrations/google-sheets](integrations/google-sheets/README.md).
 
@@ -57,7 +59,9 @@ Anything not in the diagram is refused with HTTP 409. The "who and when" rules l
 | Claim, assign, change priority, wait, resume, resolve | no | yes | yes |
 | Confirm, reject, reopen | yes | no | no |
 | Cancel | only while still new | until resolved | until resolved |
+| Attach an image | like commenting | yes (also internal) | yes |
 | See the agent queue and reports | no | yes | yes |
+| Export to Excel | no | yes | yes |
 | Manage categories | no | no | yes |
 
 An agent who also raised a ticket gets both sets of rights on it. Errors are specific: **403** when the role cannot do it, **404** when the ticket is not yours (so ids cannot be probed), **409** when its status forbids it, **400** for a missing reason or a validation problem, **401** without a token.
@@ -141,6 +145,11 @@ Routes follow the ABP convention. Every call needs a bearer token.
 | GET / POST / PUT / DELETE | `/api/app/category` … | admin to change | categories (+ `set-active`) |
 | GET | `/api/app/ticket-report/summary` | agent | counts, overdue, average resolution time |
 | GET | `/api/app/ticket-triage/suggestion` | any | category suggestions; similar tickets and a suggested reply for agents |
+| GET | `/api/app/ticket-attachment?ticketId=` | participants | the images of a ticket (without their bytes) |
+| POST | `/api/app/ticket-attachment/upload/{ticketId}?visibility=1\|2` | participants | add an image: `multipart/form-data`, part `file`; 415 not an image, 413 over 5 MB, 409 over five |
+| GET | `/api/app/ticket-attachment/{id}/content` | participants | the image itself (404 for internal ones if you are not an agent) |
+| GET | `/api/app/ticket-export/tickets` | agent | `.xlsx` of the tickets that match the queue filters (up to 5,000 rows) |
+| GET | `/api/app/ticket-export/summary` | agent | `.xlsx` of the report, one sheet each for totals, status, priority, category |
 | WS | `/signalr-hubs/tickets` | any | live `ticketChanged` notifications (token as `access_token` query string) |
 
 ## Design decisions
@@ -155,6 +164,9 @@ Routes follow the ABP convention. Every call needs a bearer token.
 | **SLA is computed in business hours** with a calendar (hours, days, holidays, time zone) | "8 hours" means 8 working hours, not a night and a weekend. It is a small, pure class with its own tests. |
 | **The Sheets export sends a minimum, signed, after the commit** | See [the integration README](integrations/google-sheets/README.md). Two bugs found only by running the real stack are described below. |
 | **Soft delete, append-only history and comments** | They are the record of who said and did what. |
+| **Images are accepted by their first bytes, not their name or declared type** | A script renamed to `photo.png` is refused (415). The stored name gets the extension of the real type, folders and control characters are stripped, and downloads carry `nosniff` and `Content-Disposition: attachment`. |
+| **Images are separate from the ticket and live in PostgreSQL** | Loading a ticket never loads bytes, and lists are projections without them. One database to back up and no file-permission questions; the cost is a bigger database (see the limitations). |
+| **Excel files are written without a library** | The format is a zip of a few XML files. Text is always a string cell, never a formula, so a title like `=HYPERLINK(...)` stays text; control characters are dropped and long cells cut to Excel's limit. Checked by opening the real output with openpyxl. |
 | **Enums are stored and sent as numbers** | Renaming a value can never change the meaning of stored data. |
 
 ### Two bugs the unit tests could not find
@@ -168,17 +180,17 @@ Running the whole stack against PostgreSQL, with real HTTP and real tokens, foun
 
 | Layer | Tests | What it proves |
 | --- | ---: | --- |
-| Domain (xUnit, no database) | 250 | the state machine guard by guard, the policy table against the aggregate for all 72 status × action pairs, the SLA calendar (weekends, holidays, time zones, pauses), the triage index |
-| Application (103 against SQLite, 25 plain) | 128 | real seeded users and real permission checks: workflow, 403/404/409, internal-note privacy, SLA pause, notifications, triage, lists and paging, categories, reports, roles, the export, and rules about the shape of the code (every service needs a permission) |
+| Domain (xUnit, no database) | 271 | the state machine guard by guard, the policy table against the aggregate for all 72 status × action pairs, the SLA calendar (weekends, holidays, time zones, pauses), the triage index, which bytes count as an image and which names are safe |
+| Application (123 against SQLite, 38 plain) | 161 | real seeded users and real permission checks: workflow, 403/404/409, internal-note and internal-image privacy, SLA pause, notifications, triage, attachments, Excel export, the demo data, lists and paging, categories, reports, roles, the Sheets export, and rules about the shape of the code (every service needs a permission); the Excel writer is checked by reading the files back |
 | PostgreSQL (Testcontainers) | 4 | the migrations apply, the model matches them, ticket numbers survive 50 simultaneous requests |
 | Google Apps Script (Node, fakes of Google) | 23 | signatures, replay, tampering, idempotency, ordering |
-| Web UI (Vitest) | 35 | the API client's errors and routes, SLA wording, notifications (no duplicates, no echo of your own action), the ticket page's buttons |
-| Flutter (`flutter test`) | 11 | the API client and the sign-in, open and confirm flow against a fake server |
-| End to end (`scripts/smoke_test.py`) | 45 checks | the whole Docker stack over HTTP (more checks when the Sheets stand-in is attached) |
+| Web UI (Vitest) | 63 | the API client's errors, routes, uploads and downloads, SLA wording, notifications, the ticket page's buttons, attaching images (what is refused before upload), Excel export buttons |
+| Flutter (`flutter test`) | 20 | the API client, the sign-in, open and confirm flow, attaching images against a fake server |
+| End to end (`scripts/smoke_test.py`) | 68 checks | the whole Docker stack over HTTP, including real multipart uploads, a 5 MB limit, and opening the downloaded `.xlsx` (more checks when the Sheets stand-in is attached) |
 
 The tests were also checked the other way round: deliberately breaking a guard, the internal-note filter, the "not your ticket" check and the replay protection each turned tests red.
 
-The web UI and the Flutter app were also driven by hand in Chrome against the real stack, which found a bug no test had: a browser that holds an `XSRF-TOKEN` cookie from another ABP app on `localhost` got an empty 400 on every POST, because ABP's automatic anti-forgery check ran on a bearer-token API. The check is now off (nothing here is authenticated by cookie) and the smoke test covers it.
+The web UI and the Flutter app were also driven by hand in Chrome against the real stack, which found two bugs no test had. The second one: demo tickets seeded with their deadlines in the year 0001 (a priority change measured the SLA from a creation time that did not exist yet), which only showed when the Excel export refused to write such a date. The seeder now saves first, the manager refuses to measure a deadline from an unsaved ticket, and the export leaves impossible dates empty. The first: a browser that holds an `XSRF-TOKEN` cookie from another ABP app on `localhost` got an empty 400 on every POST, because ABP's automatic anti-forgery check ran on a bearer-token API. The check is now off (nothing here is authenticated by cookie) and the smoke test covers it.
 
 CI runs the backend, the Apps Script, the web UI, the Flutter app and the end-to-end script on every push (`.github/workflows/ci.yml`).
 
@@ -190,7 +202,7 @@ backend/
 │   ├── Helpdesk.Domain.Shared        enums, constants, error codes, permission names, texts
 │   ├── Helpdesk.Domain               Ticket, Category, TicketPolicy, TicketManager, SLA calendar, data seed
 │   ├── Helpdesk.Application.Contracts DTOs and service interfaces
-│   ├── Helpdesk.Application          ticket, category, report and triage services, notifications, the Sheets export, auto-close worker
+│   ├── Helpdesk.Application          ticket, category, report, triage, attachment and Excel export services, notifications, the Sheets export, auto-close worker
 │   ├── Helpdesk.EntityFrameworkCore  mappings, migrations, the ticket-number generator
 │   ├── Helpdesk.HttpApi.Host         the API (auth, error mapping, Swagger, the SignalR hub)
 │   └── Helpdesk.DbMigrator           applies migrations and seeds data
@@ -210,7 +222,8 @@ docker-compose.yml
 - **The web UI keeps its token in `sessionStorage`**, which any script on the page can read; a production setup would use an HttpOnly cookie. The Flutter app keeps it in memory only, has no live updates and no agent screens, and its Android project has not been built on a device.
 - **The triage is a keyword index, not a language model.** It rebuilds from the 2,000 newest tickets on every call and knows nothing about synonyms; it is useful and easy to explain, not accurate.
 - **Notifications are not stored.** A person who is offline when a change happens never hears about it, and the bell forgets on reload. There is no e-mail or push.
-- **No attachments.**
+- **Images only, and stored in PostgreSQL.** No PDFs or documents. Five 5 MB images per ticket is at most 25 MB a ticket in the database; move them to object storage (S3, Azure Blob) before volume matters. The server checks the first bytes, not the whole image: it does not decode, re-encode or strip metadata, so a camera photo keeps its GPS tags and a file with a PNG header and garbage after it is accepted.
+- **Excel export is a snapshot in UTC.** At most 5,000 rows, built in memory, with titles and names (the agent asked for them; the Google Sheets export leaves them out by default). Opened with openpyxl, not with Excel itself.
 - **The Sheets export is best effort.** There is no outbox and no retry: a delivery lost to a network failure is logged, and the next change to that ticket repairs the row. The Apps Script itself has only been run against fakes of Google, not against a real spreadsheet.
 - **The auto-close worker runs in every API instance.** With several instances, register it in one or guard it with a distributed lock. SignalR would also need a backplane to work across instances.
 - **Demo-grade deployment.** The compose file uses development signing keys (tokens stop working after a restart), plain HTTP on localhost, and published demo passwords. Production needs a real certificate, HTTPS, secrets from a vault and `SeedDemoData=false`. Swagger is on in every environment.

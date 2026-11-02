@@ -1,5 +1,6 @@
 import { api } from '../api';
 import { ErrorBox } from '../components/bits';
+import ExportButton from '../components/ExportButton';
 import { priorityLabel, statusLabel } from '../constants';
 import { useLoad } from '../hooks';
 import { useTicketChanges } from '../notifications';
@@ -30,7 +31,10 @@ export default function Reports() {
   const hours = data.averageResolutionHours;
   return (
     <>
-      <h1>Last 30 days</h1>
+      <div className="row">
+        <h1>Last 30 days</h1>
+        <ExportButton fetchFile={api.exportSummary} />
+      </div>
       <div className="stats">
         <div className="card"><strong>{data.total}</strong><span>tickets</span></div>
         <div className={`card ${data.overdueNow ? 'bad' : ''}`}><strong>{data.overdueNow}</strong><span>overdue now</span></div>

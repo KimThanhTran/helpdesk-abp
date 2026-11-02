@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
+import Attachments from '../components/Attachments';
 import { ErrorBox, PriorityBadge, SlaBadge, StatusBadge } from '../components/bits';
 import { ACTIONS, ACTION_ORDER, Action, EventKind, Priority, Visibility, statusLabel } from '../constants';
 import { formatDate } from '../format';
@@ -172,6 +173,8 @@ export default function Ticket() {
 
       <ActionBar ticket={ticket} onDone={reload} />
       {user.isAgent ? <Hints ticket={ticket} onUseReply={setDraft} /> : null}
+
+      <Attachments ticket={ticket} />
 
       <h2>Conversation</h2>
       {ticket.comments.length === 0 ? <p className="empty">No comments yet.</p> : null}

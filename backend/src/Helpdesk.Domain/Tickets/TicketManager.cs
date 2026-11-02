@@ -57,9 +57,18 @@ public class TicketManager : DomainService
     public void ChangePriority(Ticket ticket, TicketPriority priority, Guid actorId)
     {
         var now = Clock.Now;
-        var (firstResponseDue, resolutionDue) = Targets(priority, ticket.CreationTime, ticket.PausedBusinessHours);
+        var (firstResponseDue, resolutionDue) = Targets(priority, CreatedAt(ticket), ticket.PausedBusinessHours);
         ticket.ChangePriority(priority, firstResponseDue, resolutionDue, actorId, now);
     }
+
+    /// <summary>
+    /// When the ticket was created, as ABP stamped it on insert. A ticket that has not been saved yet has no creation time,
+    /// and measuring a deadline from year 1 would be silently wrong, so that is an error.
+    /// </summary>
+    private static DateTime CreatedAt(Ticket ticket) =>
+        ticket.CreationTime != default
+            ? ticket.CreationTime
+            : throw new InvalidOperationException("Save the ticket before changing it: its creation time is not set yet.");
 
     public void Resume(Ticket ticket, Guid actorId) =>
         ticket.Resume(actorId, Clock.Now, MeasurePause(ticket));
@@ -85,7 +94,7 @@ public class TicketManager : DomainService
         }
 
         var paused = ticket.PausedBusinessHours + _calendar.BusinessHoursBetween(since, Clock.Now);
-        var (firstResponseDue, resolutionDue) = Targets(ticket.Priority, ticket.CreationTime, paused);
+        var (firstResponseDue, resolutionDue) = Targets(ticket.Priority, CreatedAt(ticket), paused);
         // an answered ticket keeps its first-response target: that clock already stopped
         return new SlaResume(
             paused, ticket.FirstRespondedAt is null ? firstResponseDue : ticket.FirstResponseDueAt, resolutionDue);

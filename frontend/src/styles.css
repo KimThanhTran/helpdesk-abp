@@ -95,3 +95,11 @@ blockquote { margin: .5rem 0; padding-left: .75rem; border-left: 3px solid var(-
 .note button { border: 0; background: none; }
 .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 20; }
 .toast { display: block; background: var(--text); color: var(--bg); padding: .7rem 1rem; border-radius: 8px; text-decoration: none; max-width: 340px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); }
+
+.export { display: inline-flex; gap: .5rem; align-items: center; }
+.gallery { list-style: none; padding: 0; margin: 0 0 1rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .75rem; }
+.gallery li { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .5rem; display: flex; flex-direction: column; gap: .4rem; }
+.thumb { display: flex; align-items: center; justify-content: center; height: 110px; background: var(--bg); border-radius: 6px; overflow: hidden; color: var(--muted); }
+.thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.caption { font-size: .78rem; color: var(--muted); word-break: break-word; }
+.upload input[type='file'] { padding: .3rem; }

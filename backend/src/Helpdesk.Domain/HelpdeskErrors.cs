@@ -23,6 +23,16 @@ public static class HelpdeskErrors
 
     public static BusinessException AssigneeNotAgent() => new(HelpdeskDomainErrorCodes.AssigneeNotAgent);
 
+    public static BusinessException AttachmentEmpty() => new(HelpdeskDomainErrorCodes.AttachmentEmpty);
+
+    public static BusinessException AttachmentTooLarge(int maxBytes) =>
+        new BusinessException(HelpdeskDomainErrorCodes.AttachmentTooLarge).WithData("MaxBytes", maxBytes);
+
+    public static BusinessException AttachmentBadType() => new(HelpdeskDomainErrorCodes.AttachmentBadType);
+
+    public static BusinessException AttachmentLimit(int max) =>
+        new BusinessException(HelpdeskDomainErrorCodes.AttachmentLimit).WithData("Max", max);
+
     public static BusinessException CategoryDuplicateName(string name) =>
         new BusinessException(HelpdeskDomainErrorCodes.CategoryDuplicateName).WithData("Name", name);
 

@@ -29,6 +29,8 @@ public class HelpdeskDbContext :
     public DbSet<Category> Categories { get; set; }
     public DbSet<Ticket> Tickets { get; set; }
     public DbSet<TicketComment> TicketComments { get; set; }
+
+    public DbSet<TicketAttachment> TicketAttachments { get; set; }
     public DbSet<TicketEvent> TicketEvents { get; set; }
     public DbSet<TicketCodeCounter> TicketCodeCounters { get; set; }
 
@@ -121,6 +123,17 @@ public class HelpdeskDbContext :
             b.ToTable(HelpdeskConsts.DbTablePrefix + "TicketComments", HelpdeskConsts.DbSchema);
             b.ConfigureByConvention();
             b.Property(x => x.Body).IsRequired().HasMaxLength(TicketConsts.MaxCommentLength);
+            b.HasIndex(x => new { x.TicketId, x.CreationTime });
+        });
+
+        builder.Entity<TicketAttachment>(b =>
+        {
+            b.ToTable(HelpdeskConsts.DbTablePrefix + "TicketAttachments", HelpdeskConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.FileName).IsRequired().HasMaxLength(TicketConsts.MaxFileNameLength + 8);
+            b.Property(x => x.ContentType).IsRequired().HasMaxLength(32);
+            b.Property(x => x.Content).IsRequired();
+            // by id only, like everything else that points at a ticket; the bytes are only ever read by id
             b.HasIndex(x => new { x.TicketId, x.CreationTime });
         });
 
