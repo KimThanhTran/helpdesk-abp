@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Helpdesk.Data;
 using Helpdesk.EntityFrameworkCore;
 using Helpdesk.MultiTenancy;
 using Volo.Abp.AspNetCore.Mvc.UI.Theme.LeptonXLite;
@@ -235,6 +236,13 @@ public class HelpdeskHttpApiHostModule : AbpModule
         // The base method runs OnApplicationInitialization below, which builds the HTTP pipeline.
         // Overriding the async version without calling it leaves every route returning 404.
         await base.OnApplicationInitializationAsync(context);
+
+        // For hosts that cannot run a separate migration step (a free web service, for example): create or update the
+        // schema and seed before serving. Leave it off when the migrator image runs first, as in docker-compose.yml.
+        if (context.GetConfiguration().GetValue<bool>("Helpdesk:MigrateOnStartup"))
+        {
+            await context.ServiceProvider.GetRequiredService<HelpdeskDbMigrationService>().MigrateAsync();
+        }
 
         await context.AddBackgroundWorkerAsync<TicketAutoCloseWorker>();
     }

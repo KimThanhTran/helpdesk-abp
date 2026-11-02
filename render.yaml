@@ -1,0 +1,35 @@
+# Render blueprint for the API. The database is a free Neon PostgreSQL (create it at neon.tech and paste its
+# connection string below when Render asks), because Render's own free database is deleted after 30 days.
+# Step by step: docs/deploy.md
+services:
+  - type: web
+    name: helpdesk-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile # the last stage in this file is the API
+    dockerContext: ./backend
+    healthCheckPath: /api/abp/application-configuration
+    envVars:
+      # Npgsql format: Host=...;Port=5432;Database=...;User ID=...;Password=...;SSL Mode=Require
+      - key: ConnectionStrings__Default
+        sync: false
+      # The public address of this service, e.g. https://helpdesk-api.onrender.com (known after the first deploy)
+      - key: App__SelfUrl
+        sync: false
+      - key: AuthServer__Authority
+        sync: false
+      # Where the UI is hosted, e.g. https://kimthanhtran.github.io
+      - key: App__CorsOrigins
+        sync: false
+      - key: AuthServer__RequireHttpsMetadata
+        value: "false" # Render ends TLS in front of the container; the container itself speaks HTTP
+      - key: AuthServer__SwaggerClientId
+        value: Helpdesk_Demo
+      - key: Helpdesk__MigrateOnStartup
+        value: "true"
+      - key: Helpdesk__SeedDemoData
+        value: "true" # public demo accounts: do not keep real data in this database
+      - key: Helpdesk__SeedDemoTickets
+        value: "true"
+      - key: StringEncryption__DefaultPassPhrase
+        generateValue: true

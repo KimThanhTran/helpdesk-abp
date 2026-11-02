@@ -4,7 +4,9 @@ import { defineConfig } from 'vitest/config';
 // In development the API is reached through the dev server, so the browser sees one origin and no CORS is needed.
 const target = process.env.API_TARGET || 'http://localhost:8080';
 
+// GitHub Pages serves the site from /<repo>/, so the workflow sets VITE_BASE=/helpdesk-abp/
 export default defineConfig({
+  base: process.env.VITE_BASE || '/',
   plugins: [react()],
   server: {
     proxy: {

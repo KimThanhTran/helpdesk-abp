@@ -27,6 +27,23 @@ jobs:
           node-version: 22
       - run: node --test integrations/google-sheets/Code.test.js
 
+  frontend:
+    name: Web UI tests and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
   end-to-end:
     name: End to end (Docker stack + Google Sheets stand-in)
     runs-on: ubuntu-latest

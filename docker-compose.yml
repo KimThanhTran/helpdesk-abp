@@ -1,10 +1,20 @@
-# Local demo stack: PostgreSQL, a one-shot migration (with demo data), and the API on http://localhost:8080.
+# Local demo stack: PostgreSQL, a one-shot migration (with demo data), the API on http://localhost:8080
+# and the web UI on http://localhost:3000 (nginx, which forwards /api, /connect and /signalr-hubs to the API).
 #
 #   docker compose up --build                       # API only
 #   docker compose --profile sheets-demo up --build # plus a stand-in for the Google Apps Script web app
 #
 # The demo passwords and secrets below are for local use only. Do not deploy this file as it is.
 services:
+  web:
+    build:
+      context: ./frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+
   db:
     image: postgres:16-alpine
     environment:
@@ -29,6 +39,7 @@ services:
     environment:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=Helpdesk;User ID=helpdesk;Password=${POSTGRES_PASSWORD:-helpdesk-demo-only}"
       Helpdesk__SeedDemoData: "true"
+      Helpdesk__SeedDemoTickets: "true" # a dozen past tickets, so the triage suggestions have history to learn from
       OpenIddict__Applications__Helpdesk_Swagger__RootUrl: "http://localhost:8080"
     restart: "no"
 
