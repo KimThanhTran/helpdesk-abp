@@ -3,7 +3,7 @@ import { api } from '../api';
 import { Action, Visibility } from '../constants';
 import { formatBytes } from '../download';
 import { formatDate } from '../format';
-import { useLoad } from '../hooks';
+import { useLoad, usePastedImages } from '../hooks';
 import { useTicketChanges } from '../notifications';
 import { ErrorBox } from './bits';
 
@@ -61,28 +61,41 @@ export default function Attachments({ ticket }) {
   const canPublic = ticket.actions.includes(Action.Comment);
   const canInternal = ticket.actions.includes(Action.InternalNote);
 
-  const choose = async (event) => {
-    const input = event.target;
-    const file = input.files?.[0];
-    input.value = ''; // the same file can be picked again later
-    if (!file) return;
+  const canUpload = canPublic || canInternal;
 
-    const refusal = problemWith(file, items.length);
-    if (refusal) {
-      setProblem(new Error(refusal));
-      return;
-    }
+  /** Chosen with the file dialog or pasted: check each one, upload the good ones, say what was wrong with the rest. */
+  const attach = async (files) => {
     setBusy(true);
     setProblem(null);
+    let count = items.length;
+    let uploaded = false;
     try {
-      await api.uploadAttachment(ticket.id, file, internal || !canPublic);
-      reload();
+      for (const file of files) {
+        const refusal = problemWith(file, count);
+        if (refusal) {
+          setProblem(new Error(`${file.name}: ${refusal}`));
+          continue;
+        }
+        await api.uploadAttachment(ticket.id, file, internal || !canPublic);
+        count += 1;
+        uploaded = true;
+      }
     } catch (failure) {
       setProblem(failure);
     } finally {
       setBusy(false);
+      if (uploaded) reload();
     }
   };
+
+  const choose = (event) => {
+    const input = event.target;
+    const files = [...input.files];
+    input.value = ''; // the same file can be picked again later
+    if (files.length > 0) attach(files);
+  };
+
+  usePastedImages((files) => !busy && attach(files), canUpload);
 
   if (items.length === 0 && !canPublic && !canInternal) return null;
   return (
@@ -104,8 +117,8 @@ export default function Attachments({ ticket }) {
       </ul>
       {canPublic || canInternal ? (
         <div className="card upload">
-          <label>Attach an image (PNG, JPEG or WebP, up to 5 MB, {MAX_FILES} per ticket)
-            <input type="file" accept={ACCEPTED.join(',')} onChange={choose} disabled={busy || items.length >= MAX_FILES} />
+          <label>Attach an image, or paste a screenshot with Ctrl+V (PNG, JPEG or WebP, up to 5 MB, {MAX_FILES} per ticket)
+            <input type="file" multiple accept={ACCEPTED.join(',')} onChange={choose} disabled={busy || items.length >= MAX_FILES} />
           </label>
           {canInternal && canPublic ? (
             <label className="check"><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> Internal (the requester will not see it)</label>

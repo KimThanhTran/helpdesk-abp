@@ -35,3 +35,32 @@ export function useDebounced(value, ms = 500) {
   }, [value, ms]);
   return settled;
 }
+
+const EXTENSION = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+
+/** A screenshot from the clipboard is called "image.png"; give it a name that tells screenshots apart. */
+export function nameScreenshot(file, now = new Date()) {
+  const two = (n) => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
+  return new File([file], `screenshot-${stamp}.${EXTENSION[file.type] ?? 'png'}`, { type: file.type });
+}
+
+/**
+ * Calls `onImages(files)` when the person pastes (Ctrl+V) an image anywhere on the page, such as a screenshot.
+ * Pasting text is left alone: the page only steps in when the clipboard holds an image.
+ */
+export function usePastedImages(onImages, enabled = true) {
+  const latest = useRef(onImages);
+  latest.current = onImages;
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const onPaste = (event) => {
+      const images = [...(event.clipboardData?.files ?? [])].filter((file) => file.type.startsWith('image/'));
+      if (images.length === 0) return;
+      event.preventDefault();
+      latest.current(images.map((file) => nameScreenshot(file)));
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [enabled]);
+}

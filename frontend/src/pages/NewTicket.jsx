@@ -4,7 +4,7 @@ import { api } from '../api';
 import { ACCEPTED, MAX_FILES, problemWith } from '../components/Attachments';
 import { ErrorBox } from '../components/bits';
 import { formatBytes } from '../download';
-import { useDebounced, useLoad } from '../hooks';
+import { useDebounced, useLoad, usePastedImages } from '../hooks';
 
 const MIN_FOR_HINT = 8; // characters in the title before it is worth asking for a suggestion
 
@@ -47,10 +47,8 @@ export default function NewTicket() {
     return () => controller.abort();
   }, [typedTitle, typedDescription]);
 
-  const choose = (event) => {
-    const input = event.target;
-    const chosen = [...input.files];
-    input.value = ''; // the same file can be picked again after removing it
+  /** Chosen with the file dialog or pasted from the clipboard. */
+  const addFiles = (chosen) => {
     let next = files;
     let problem = null;
     for (const file of chosen) {
@@ -61,6 +59,15 @@ export default function NewTicket() {
     setFiles(next);
     setFileProblem(problem ? new Error(problem) : null);
   };
+
+  const choose = (event) => {
+    const input = event.target;
+    const chosen = [...input.files];
+    input.value = ''; // the same file can be picked again after removing it
+    addFiles(chosen);
+  };
+
+  usePastedImages(addFiles, !busy);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -100,7 +107,7 @@ export default function NewTicket() {
             {list.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
         </label>
-        <label>Images (optional: PNG, JPEG or WebP, up to 5 MB each, {MAX_FILES} per ticket)
+        <label>Images (optional: choose files or paste a screenshot with Ctrl+V; PNG, JPEG or WebP, up to 5 MB each, {MAX_FILES} per ticket)
           <input type="file" multiple accept={ACCEPTED.join(',')} onChange={choose} disabled={busy || files.length >= MAX_FILES} />
         </label>
         {files.length > 0 ? (
