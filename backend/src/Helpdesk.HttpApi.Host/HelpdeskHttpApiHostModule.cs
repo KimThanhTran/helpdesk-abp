@@ -24,6 +24,7 @@ using Volo.Abp.Account.Web;
 using Volo.Abp.AspNetCore.MultiTenancy;
 using Volo.Abp.AspNetCore.ExceptionHandling;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.AspNetCore.Mvc.AntiForgery;
 using Volo.Abp.AspNetCore.SignalR;
 using Volo.Abp.AspNetCore.Mvc.Libs;
 using Volo.Abp.AspNetCore.Mvc.UI.Bundling;
@@ -95,6 +96,11 @@ public class HelpdeskHttpApiHostModule : AbpModule
         });
         // This host is an API: it serves no pages of its own, so there are no client-side libraries to check for.
         Configure<AbpMvcLibsOptions>(options => options.CheckLibs = false);
+
+        // Callers are authenticated by a bearer token only, never by a cookie, so there is nothing for a forged
+        // cross-site request to ride on. ABP's automatic token check would still answer 400 (empty body) to any browser
+        // that holds an XSRF-TOKEN cookie from another ABP app on the same host name, such as another localhost port.
+        Configure<AbpAntiForgeryOptions>(options => options.AutoValidate = false);
 
         ConfigureBundles();
         ConfigureUrls(configuration);

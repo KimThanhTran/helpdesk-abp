@@ -6,7 +6,9 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 
-A support-desk back end built on the [ABP Framework](https://abp.io): people raise tickets, agents pick them up from a queue and work them to a close, and managers can follow everything in a Google Sheet. It is a REST API with a PostgreSQL database; a web front end is planned but not built yet (see [Limitations](#limitations-and-next-steps)).
+A support desk built on the [ABP Framework](https://abp.io): people raise tickets, agents pick them up from a queue and work them to a close, and managers can follow everything in a Google Sheet. It is a REST API with a PostgreSQL database, a React web UI with live notifications, and a Flutter app for requesters.
+
+![An agent's view of a ticket: the actions the server allows, and suggestions from similar closed tickets](docs/agent-ticket.jpg)
 
 The focus of the project is getting the hard parts right and proving it: the ticket life cycle, who may do what, the privacy of internal notes, SLA targets in business hours, safe ticket numbering under load, and an export to Google Sheets that cannot leak or corrupt data.
 
@@ -18,6 +20,10 @@ The focus of the project is getting the hard parts right and proving it: the tic
 - **SLA targets in business hours** (first response and resolution, by priority), with a configurable calendar, time zone and holidays, and "overdue" flags.
 - **Categories as data.** Adding "Legal" or "Facilities" needs no deployment and no change to the ticket rules.
 - **Reopen and auto-close.** A requester confirms or rejects a resolution, can reopen a closed ticket for 10 days, and a resolved ticket nobody answers closes itself after 5 days.
+- **The SLA clock stops while a ticket waits for the requester.** The working hours spent waiting are added to both targets when it resumes, by an agent or by the requester's reply.
+- **Live notifications over SignalR.** Agents hear about every change, everyone else about the tickets they raised. A notification names the ticket and the change, never its description or a comment.
+- **Triage suggestions** from the tickets that already exist (TF-IDF, no external AI service): the likely category while typing, similar tickets, a warning for a probable duplicate and how a similar ticket was solved. Other people's tickets are shown to agents only.
+- **A React web UI** ([frontend](frontend)) and **a Flutter app** for requesters ([mobile](mobile/README.md)). Both show exactly the buttons the API lists in `actions`.
 - **Reports:** counts by status, priority and category, average time to resolve, and what is overdue right now.
 - **Google Sheets export** through a Google Apps Script, signed and privacy-first. See [integrations/google-sheets](integrations/google-sheets/README.md).
 
@@ -63,10 +69,12 @@ You need Docker. Nothing else.
 ```bash
 git clone https://github.com/KimThanhTran/helpdesk-abp.git
 cd helpdesk-abp
-docker compose up --build        # PostgreSQL + migrations + demo data + API on http://localhost:8080
+docker compose up --build        # PostgreSQL + migrations + demo data + API on http://localhost:8080 + web UI on http://localhost:3000
 ```
 
-The demo data has four users, all with the password `1q2w3E*` (**demo only**): `alice` and `bob` (requesters), `agent1` (agent) and `admin`.
+Open <http://localhost:3000>, sign in as `alice` (requester) in one tab and `agent1` (agent) in another, and watch one react to the other: the notification bell, the SLA that pauses when the agent waits for the requester, the suggestions on the agent's ticket page. The Flutter app is described in [mobile/README.md](mobile/README.md). To put the demo online see [docs/deploy.md](docs/deploy.md).
+
+The demo data has four users, all with the password `1q2w3E*` (**demo only**): `alice` and `bob` (requesters), `agent1` (agent) and `admin`, plus a dozen past tickets so the suggestions have history to learn from.
 
 ### Try it in Swagger
 
@@ -108,6 +116,10 @@ export ConnectionStrings__Default="Host=localhost;Database=Helpdesk;User ID=post
 dotnet run --project src/Helpdesk.DbMigrator          # create the schema and the demo data
 dotnet run --project src/Helpdesk.HttpApi.Host        # the API (see launchSettings for the port)
 dotnet test Helpdesk.slnx                             # needs Docker for the PostgreSQL tests
+
+cd ../frontend && npm ci
+API_TARGET=http://localhost:5080 npm run dev          # the web UI on :5173, forwarding /api, /connect and /signalr-hubs to the API
+npm test                                              # 35 tests
 ```
 
 ## API
@@ -128,6 +140,8 @@ Routes follow the ABP convention. Every call needs a bearer token.
 | POST | `/api/app/ticket/{id}/comment` | participants | public comment or internal note |
 | GET / POST / PUT / DELETE | `/api/app/category` … | admin to change | categories (+ `set-active`) |
 | GET | `/api/app/ticket-report/summary` | agent | counts, overdue, average resolution time |
+| GET | `/api/app/ticket-triage/suggestion` | any | category suggestions; similar tickets and a suggested reply for agents |
+| WS | `/signalr-hubs/tickets` | any | live `ticketChanged` notifications (token as `access_token` query string) |
 
 ## Design decisions
 
@@ -154,15 +168,19 @@ Running the whole stack against PostgreSQL, with real HTTP and real tokens, foun
 
 | Layer | Tests | What it proves |
 | --- | ---: | --- |
-| Domain (xUnit, no database) | 217 | the state machine guard by guard, the policy table against the aggregate for all 72 status × action pairs, the SLA calendar (weekends, holidays, time zones) |
-| Application (73 against SQLite, 25 plain) | 98 | real seeded users and real permission checks: workflow, 403/404/409, internal-note privacy, lists and paging, categories, reports, roles, the export, and rules about the shape of the code (every service needs a permission) |
+| Domain (xUnit, no database) | 250 | the state machine guard by guard, the policy table against the aggregate for all 72 status × action pairs, the SLA calendar (weekends, holidays, time zones, pauses), the triage index |
+| Application (103 against SQLite, 25 plain) | 128 | real seeded users and real permission checks: workflow, 403/404/409, internal-note privacy, SLA pause, notifications, triage, lists and paging, categories, reports, roles, the export, and rules about the shape of the code (every service needs a permission) |
 | PostgreSQL (Testcontainers) | 4 | the migrations apply, the model matches them, ticket numbers survive 50 simultaneous requests |
 | Google Apps Script (Node, fakes of Google) | 23 | signatures, replay, tampering, idempotency, ordering |
-| End to end (`scripts/smoke_test.py`) | 49 checks | the whole Docker stack over HTTP, including the contents of the sheet |
+| Web UI (Vitest) | 35 | the API client's errors and routes, SLA wording, notifications (no duplicates, no echo of your own action), the ticket page's buttons |
+| Flutter (`flutter test`) | 11 | the API client and the sign-in, open and confirm flow against a fake server |
+| End to end (`scripts/smoke_test.py`) | 45 checks | the whole Docker stack over HTTP (more checks when the Sheets stand-in is attached) |
 
 The tests were also checked the other way round: deliberately breaking a guard, the internal-note filter, the "not your ticket" check and the replay protection each turned tests red.
 
-CI runs all of it on every push (`.github/workflows/ci.yml`).
+The web UI and the Flutter app were also driven by hand in Chrome against the real stack, which found a bug no test had: a browser that holds an `XSRF-TOKEN` cookie from another ABP app on `localhost` got an empty 400 on every POST, because ABP's automatic anti-forgery check ran on a bearer-token API. The check is now off (nothing here is authenticated by cookie) and the smoke test covers it.
+
+CI runs the backend, the Apps Script, the web UI, the Flutter app and the end-to-end script on every push (`.github/workflows/ci.yml`).
 
 ## Project structure
 
@@ -172,26 +190,31 @@ backend/
 │   ├── Helpdesk.Domain.Shared        enums, constants, error codes, permission names, texts
 │   ├── Helpdesk.Domain               Ticket, Category, TicketPolicy, TicketManager, SLA calendar, data seed
 │   ├── Helpdesk.Application.Contracts DTOs and service interfaces
-│   ├── Helpdesk.Application          ticket, category and report services, the Sheets export, auto-close worker
+│   ├── Helpdesk.Application          ticket, category, report and triage services, notifications, the Sheets export, auto-close worker
 │   ├── Helpdesk.EntityFrameworkCore  mappings, migrations, the ticket-number generator
-│   ├── Helpdesk.HttpApi.Host         the API (auth, error mapping, Swagger)
+│   ├── Helpdesk.HttpApi.Host         the API (auth, error mapping, Swagger, the SignalR hub)
 │   └── Helpdesk.DbMigrator           applies migrations and seeds data
 ├── test/                             Domain.Tests, Application.Tests, EntityFrameworkCore.Tests, PostgresTests
 └── Dockerfile                        targets: api, migrator
+frontend/                             React UI (Vite), Dockerfile + nginx that serves it and forwards the API
+mobile/                               Flutter app for requesters
 integrations/google-sheets/           Code.gs (Apps Script), its tests, a local stand-in server
+docs/deploy.md, render.yaml           putting the demo online (Render + Neon + GitHub Pages)
 scripts/smoke_test.py                 end-to-end check over HTTP
 docker-compose.yml
 ```
 
 ## Limitations and next steps
 
-- **No front end yet.** This is the API. A React interface that uses it is the next step.
-- **The SLA clock does not pause while a ticket is waiting.** A waiting ticket is simply not counted as overdue. Pausing and extending the due date is the natural next feature.
-- **No attachments and no e-mail or in-app notifications.**
-- **The Sheets export is best effort.** There is no outbox and no retry: a delivery lost to a network failure is logged, and the next change to that ticket repairs the row.
-- **The auto-close worker runs in every API instance.** With several instances, register it in one or guard it with a distributed lock.
+- **The live demo needs your own accounts.** Everything for it is in the repository ([docs/deploy.md](docs/deploy.md), `render.yaml`, the Pages workflow), but it has not been deployed: Render, Neon and GitHub Pages sign-ups cannot be done for you. A free API sleeps after 15 minutes idle and takes about a minute to wake.
+- **The web UI keeps its token in `sessionStorage`**, which any script on the page can read; a production setup would use an HttpOnly cookie. The Flutter app keeps it in memory only, has no live updates and no agent screens, and its Android project has not been built on a device.
+- **The triage is a keyword index, not a language model.** It rebuilds from the 2,000 newest tickets on every call and knows nothing about synonyms; it is useful and easy to explain, not accurate.
+- **Notifications are not stored.** A person who is offline when a change happens never hears about it, and the bell forgets on reload. There is no e-mail or push.
+- **No attachments.**
+- **The Sheets export is best effort.** There is no outbox and no retry: a delivery lost to a network failure is logged, and the next change to that ticket repairs the row. The Apps Script itself has only been run against fakes of Google, not against a real spreadsheet.
+- **The auto-close worker runs in every API instance.** With several instances, register it in one or guard it with a distributed lock. SignalR would also need a backplane to work across instances.
 - **Demo-grade deployment.** The compose file uses development signing keys (tokens stop working after a restart), plain HTTP on localhost, and published demo passwords. Production needs a real certificate, HTTPS, secrets from a vault and `SeedDemoData=false`. Swagger is on in every environment.
-- **Not covered by tests:** HTTP status mapping is checked only by the end-to-end script, not by unit tests; load and security testing have not been done.
+- **Not covered by tests:** HTTP status mapping is checked only by the end-to-end script; load and security testing have not been done. The build reports a known vulnerability in a transitive package (`System.Security.Cryptography.Xml`) that comes with ABP and has not been upgraded here.
 - The user interface language is English only, and there is no multi-tenancy (switched off).
 
 ## Credits

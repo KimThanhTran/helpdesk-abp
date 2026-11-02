@@ -25,7 +25,7 @@ failures = []
 checks = 0
 
 
-def call(method, path, token=None, body=None, form=None):
+def call(method, path, token=None, body=None, form=None, extra_headers=None):
     """Returns (status, parsed json or None)."""
     data = None
     headers = {}
@@ -37,6 +37,7 @@ def call(method, path, token=None, body=None, form=None):
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    headers.update(extra_headers or {})
     request = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
@@ -132,6 +133,9 @@ def main():
     tid = ticket["id"]
     check("ticket is new, numbered HD-yyyy-nnnnnn and unassigned",
           ticket["status"] == NEW and ticket["code"].startswith("HD-") and ticket["assignee"] is None, ticket["code"])
+    # a browser that holds an XSRF-TOKEN cookie from another ABP app on localhost must still be able to post
+    expect("a stale XSRF-TOKEN cookie does not break a bearer-token POST",
+           call("POST", "/api/app/ticket", alice, body, extra_headers={"Cookie": "XSRF-TOKEN=stale"}), 200)
     expect("empty title is a validation error", call("POST", "/api/app/ticket", alice, {**body, "title": ""}), 400)
     expect("unknown category is not found", call("POST", "/api/app/ticket", alice, {**body, "categoryId": "00000000-0000-0000-0000-000000000001"}), 404)
 

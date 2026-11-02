@@ -44,6 +44,22 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  mobile:
+    name: Flutter analyze and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
   end-to-end:
     name: End to end (Docker stack + Google Sheets stand-in)
     runs-on: ubuntu-latest

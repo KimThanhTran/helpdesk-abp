@@ -24,7 +24,7 @@ function Bell() {
           {items.map((item) => (
             <div key={item.eventId} className="note">
               <Link to={`/tickets/${item.ticketId}`} onClick={() => setOpen(false)}>
-                <strong>{item.code}</strong> {item.message}
+                {item.message}
               </Link>
               <button type="button" aria-label="Dismiss" onClick={() => dismiss(item.eventId)}>×</button>
             </div>
@@ -52,7 +52,7 @@ function Toast() {
     <div className="toasts" role="status" aria-live="polite">
       {shown ? (
         <Link className="toast" to={`/tickets/${shown.ticketId}`} onClick={() => setShown(null)}>
-          <strong>{shown.code}</strong> {shown.message}
+          {shown.message}
         </Link>
       ) : null}
     </div>
