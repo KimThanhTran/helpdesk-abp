@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth';
+import { useT } from './i18n';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import { MyTickets, Queue } from './pages/Lists';
@@ -8,8 +9,9 @@ import Reports from './pages/Reports';
 import Ticket from './pages/Ticket';
 
 export default function App() {
+  const { t } = useT();
   const { token, user, loading } = useAuth();
-  if (loading) return <p className="center">Loading…</p>;
+  if (loading) return <p className="center">{t('app.loading')}</p>;
   if (!token || !user) return <Login />;
 
   return (

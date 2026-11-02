@@ -5,22 +5,24 @@ import { ErrorBox, Pager, TicketTable } from '../components/bits';
 import ExportButton from '../components/ExportButton';
 import { Priority, Scope, Status } from '../constants';
 import { useDebounced, useLoad } from '../hooks';
+import { useT } from '../i18n';
 import { useTicketChanges } from '../notifications';
 
 const SIZE = 15;
 
 function Filters({ filter, setFilter, status, setStatus, priority, setPriority }) {
+  const { t } = useT();
   return (
     <div className="filters">
-      <input type="search" placeholder="Search code or title" aria-label="Search" value={filter} onChange={(e) => setFilter(e.target.value)} />
-      <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">Any status</option>
-        {Object.entries(Status).map(([name, value]) => <option key={value} value={value}>{name}</option>)}
+      <input type="search" placeholder={t('filter.search')} aria-label={t('filter.searchLabel')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <select aria-label={t('filter.status')} value={status} onChange={(e) => setStatus(e.target.value)}>
+        <option value="">{t('filter.anyStatus')}</option>
+        {Object.values(Status).map((value) => <option key={value} value={value}>{t(`status.${value}`)}</option>)}
       </select>
       {setPriority ? (
-        <select aria-label="Priority" value={priority} onChange={(e) => setPriority(e.target.value)}>
-          <option value="">Any priority</option>
-          {Object.entries(Priority).map(([name, value]) => <option key={value} value={value}>{name}</option>)}
+        <select aria-label={t('filter.priority')} value={priority} onChange={(e) => setPriority(e.target.value)}>
+          <option value="">{t('filter.anyPriority')}</option>
+          {Object.values(Priority).map((value) => <option key={value} value={value}>{t(`priority.${value}`)}</option>)}
         </select>
       ) : null}
     </div>
@@ -35,6 +37,7 @@ function useTickets(fetcher, params) {
 }
 
 export function MyTickets() {
+  const { t } = useT();
   const [filter, setFilter] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(0);
@@ -44,20 +47,21 @@ export function MyTickets() {
   return (
     <>
       <div className="row">
-        <h1>My tickets</h1>
-        <Link to="/new" className="button primary">New ticket</Link>
+        <h1>{t('lists.mine')}</h1>
+        <Link to="/new" className="button primary">{t('lists.new')}</Link>
       </div>
       <Filters filter={filter} setFilter={(v) => { setFilter(v); setPage(0); }} status={status} setStatus={(v) => { setStatus(v); setPage(0); }} />
       <ErrorBox error={error} />
-      {data ? <TicketTable tickets={data.items} /> : loading ? <p>Loading…</p> : null}
+      {data ? <TicketTable tickets={data.items} /> : loading ? <p>{t('loading')}</p> : null}
       {data ? <Pager page={page} size={SIZE} total={data.totalCount} onPage={setPage} /> : null}
     </>
   );
 }
 
-const SCOPES = [['Unassigned', Scope.Unassigned], ['Mine', Scope.Mine], ['All', Scope.All]];
+const SCOPES = [Scope.Unassigned, Scope.Mine, Scope.All];
 
 export function Queue() {
+  const { t } = useT();
   const [scope, setScope] = useState(Scope.Unassigned);
   const [filter, setFilter] = useState('');
   const [status, setStatus] = useState('');
@@ -70,12 +74,12 @@ export function Queue() {
   return (
     <>
       <div className="row">
-        <h1>Queue</h1>
+        <h1>{t('queue.title')}</h1>
         <ExportButton fetchFile={() => api.exportTickets({ scope, filter: text, status, priority })} />
       </div>
       <div className="tabs" role="tablist">
-        {SCOPES.map(([name, value]) => (
-          <button key={value} type="button" role="tab" aria-selected={scope === value} onClick={() => reset(setScope)(value)}>{name}</button>
+        {SCOPES.map((value) => (
+          <button key={value} type="button" role="tab" aria-selected={scope === value} onClick={() => reset(setScope)(value)}>{t(`scope.${value}`)}</button>
         ))}
       </div>
       <Filters
@@ -83,7 +87,7 @@ export function Queue() {
         priority={priority} setPriority={reset(setPriority)}
       />
       <ErrorBox error={error} />
-      {data ? <TicketTable tickets={data.items} showRequester /> : loading ? <p>Loading…</p> : null}
+      {data ? <TicketTable tickets={data.items} showRequester /> : loading ? <p>{t('loading')}</p> : null}
       {data ? <Pager page={page} size={SIZE} total={data.totalCount} onPage={setPage} /> : null}
     </>
   );

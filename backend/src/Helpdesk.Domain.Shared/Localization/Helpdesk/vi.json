@@ -4,6 +4,25 @@
     "AppName": "Helpdesk",
     "Menu:Home": "Trang chủ",
     "Welcome": "Chào mừng bạn",
-    "LongWelcomeMessage": "Chào mừng bạn đến ứng dụng. Đây là một dự án khởi nghiệp dựa trên khung ABP. Để biết thêm thông tin, hãy truy cập abp.io."
+    "LongWelcomeMessage": "Chào mừng bạn đến ứng dụng. Đây là một dự án khởi nghiệp dựa trên khung ABP. Để biết thêm thông tin, hãy truy cập abp.io.",
+    "Helpdesk:NotAllowed": "Vai trò của bạn không được phép thực hiện thao tác này trên phiếu.",
+    "Helpdesk:Ticket:InvalidTransition": "Phiếu đang ở trạng thái {Status} nên không thể thực hiện thao tác này ({Action}).",
+    "Helpdesk:Ticket:ReasonRequired": "Vui lòng nhập lý do.",
+    "Helpdesk:Ticket:ReopenWindowExpired": "Phiếu này đã đóng hơn {Days} ngày. Hãy tạo phiếu mới.",
+    "Helpdesk:Ticket:CategoryInactive": "Danh mục này đã bị tắt.",
+    "Helpdesk:Ticket:AssigneeNotAgent": "Chỉ có thể giao phiếu cho nhân viên hỗ trợ (agent).",
+    "Helpdesk:Attachment:Empty": "Tệp trống.",
+    "Helpdesk:Attachment:TooLarge": "Ảnh quá lớn. Giới hạn là 5 MB.",
+    "Helpdesk:Attachment:BadType": "Chỉ có thể đính kèm ảnh PNG, JPEG và WebP.",
+    "Helpdesk:Attachment:Limit": "Mỗi phiếu chỉ chứa tối đa {Max} ảnh.",
+    "Helpdesk:Category:DuplicateName": "Đã có danh mục tên '{Name}'.",
+    "Helpdesk:Category:InUse": "Danh mục này đã có phiếu. Hãy tắt danh mục thay vì xóa.",
+    "Permission:Tickets": "Phiếu hỗ trợ",
+    "Permission:Tickets.Create": "Tạo phiếu",
+    "Permission:Tickets.Work": "Xử lý phiếu (agent)",
+    "Permission:Categories": "Danh mục",
+    "Permission:Categories.Manage": "Quản lý danh mục",
+    "Permission:Reports": "Xem báo cáo",
+    "Helpdesk": "Helpdesk"
   }
 }

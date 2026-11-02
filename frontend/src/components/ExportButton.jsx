@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { saveFile } from '../download';
+import { useT } from '../i18n';
 import { ErrorBox } from './bits';
 
 /** Runs `fetchFile` (an API call that resolves to { blob, filename }) and saves the result. */
-export default function ExportButton({ fetchFile, children = 'Export to Excel' }) {
+export default function ExportButton({ fetchFile }) {
+  const { t } = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -21,7 +23,7 @@ export default function ExportButton({ fetchFile, children = 'Export to Excel' }
 
   return (
     <span className="export">
-      <button type="button" onClick={run} disabled={busy}>{busy ? 'Preparing…' : children}</button>
+      <button type="button" onClick={run} disabled={busy}>{busy ? t('export.busy') : t('export.button')}</button>
       <ErrorBox error={error} />
     </span>
   );

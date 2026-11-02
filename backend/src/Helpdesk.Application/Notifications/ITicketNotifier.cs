@@ -18,6 +18,9 @@ public class TicketNotification
 
     public string Status { get; set; } = null!;
 
+    /// <summary>The ticket's priority, so a client can word a priority change in its own language.</summary>
+    public string Priority { get; set; } = null!;
+
     /// <summary>Created, Assigned, StatusChanged...</summary>
     public string Kind { get; set; } = null!;
 

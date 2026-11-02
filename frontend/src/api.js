@@ -5,13 +5,21 @@ import { ACTIONS } from './constants';
 export const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
 export class ApiError extends Error {
-  constructor(status, message, code) {
+  /** `kind` marks the client's own messages ('network', 'expired', 'login'), which the page words in the chosen language. */
+  constructor(status, message, code, kind) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.kind = kind;
   }
 }
+
+let language = 'en';
+/** The language the server should answer its own messages in (sent as Accept-Language). */
+export const setLanguage = (value) => {
+  language = value;
+};
 
 let token = null;
 let onUnauthorized = () => {};
@@ -59,6 +67,7 @@ async function request(method, path, { params, body, form, signal, blob } = {}) 
       method,
       signal,
       headers: {
+        'Accept-Language': language,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         // for a FormData the browser adds the Content-Type itself, with the multipart boundary
         ...(body ? { 'Content-Type': 'application/json' } : {}),
@@ -67,12 +76,12 @@ async function request(method, path, { params, body, form, signal, blob } = {}) 
     });
   } catch (error) {
     if (error.name === 'AbortError') throw error;
-    throw new ApiError(0, 'Cannot reach the server. Is the API running?');
+    throw new ApiError(0, 'Cannot reach the server. Is the API running?', undefined, 'network');
   }
 
   if (response.status === 401 && token) {
     onUnauthorized();
-    throw new ApiError(401, 'Your session has expired. Please sign in again.');
+    throw new ApiError(401, 'Your session has expired. Please sign in again.', undefined, 'expired');
   }
   if (!response.ok) {
     const { message, code } = await readError(response);
@@ -88,17 +97,17 @@ export async function signIn(username, password) {
   try {
     response = await fetch(`${API_URL}/connect/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept-Language': language },
       body: new URLSearchParams({
         grant_type: 'password', client_id: 'Helpdesk_Demo', username, password, scope: 'Helpdesk',
       }),
     });
   } catch {
-    throw new ApiError(0, 'Cannot reach the server. Is the API running?');
+    throw new ApiError(0, 'Cannot reach the server. Is the API running?', undefined, 'network');
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new ApiError(response.status, data.error_description || 'Invalid user name or password.');
+    throw new ApiError(response.status, data.error_description || 'Invalid user name or password.', undefined, 'login');
   }
   return data.access_token;
 }

@@ -11,9 +11,11 @@ const statusNames = {1: 'New', 2: 'Open', 3: 'Waiting', 4: 'Resolved', 5: 'Close
 const priorityNames = {1: 'Low', 2: 'Normal', 3: 'High', 4: 'Urgent'};
 
 class ApiException implements Exception {
-  ApiException(this.status, this.message);
+  /// [kind] marks the app's own messages ('network', 'expired', 'login'), which the screen words in the chosen language.
+  ApiException(this.status, this.message, [this.kind]);
   final int status;
   final String message;
+  final String? kind;
   @override
   String toString() => message;
 }
@@ -109,15 +111,15 @@ const maxAttachmentBytes = 5 * 1024 * 1024;
 const maxAttachments = 5;
 const _imageExtensions = ['png', 'jpg', 'jpeg', 'webp'];
 
-/// Why this file cannot be attached, or null when it looks fine. The server checks the real content again; this only
+/// Why this file cannot be attached, as a text key (see strings.dart), or null when it looks fine. The server checks the real content again; this only
 /// saves an upload when the answer is obvious.
 String? attachmentProblem(String name, int size, int alreadyAttached) {
-  if (alreadyAttached >= maxAttachments) return 'A ticket can hold at most $maxAttachments images.';
+  if (alreadyAttached >= maxAttachments) return 'attach.limit';
   final dot = name.lastIndexOf('.');
   final extension = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
-  if (!_imageExtensions.contains(extension)) return 'Only PNG, JPEG and WebP images can be attached.';
-  if (size == 0) return 'The file is empty.';
-  if (size > maxAttachmentBytes) return 'The image is too large. The limit is 5 MB.';
+  if (!_imageExtensions.contains(extension)) return 'attach.type';
+  if (size == 0) return 'attach.empty';
+  if (size > maxAttachmentBytes) return 'attach.big';
   return null;
 }
 
@@ -133,15 +135,15 @@ DateTime parseUtc(String value) =>
 
 /// What a requester may do besides commenting: the action code, its route and the body field it needs.
 enum Act {
-  confirm(9, 'confirm', 'Confirm it is solved', null),
-  reject(10, 'reject', 'Not solved', 'reason'),
-  reopen(11, 'reopen', 'Reopen', 'reason'),
-  cancel(12, 'cancel', 'Cancel ticket', 'reason');
+  confirm(9, 'confirm', null),
+  reject(10, 'reject', 'reason'),
+  reopen(11, 'reopen', 'reason'),
+  cancel(12, 'cancel', 'reason');
 
-  const Act(this.code, this.path, this.label, this.field);
+  /// The button text is the key `act.<path>` in strings.dart.
+  const Act(this.code, this.path, this.field);
   final int code;
   final String path;
-  final String label;
 
   /// Null when the action needs no text.
   final String? field;
@@ -156,6 +158,9 @@ class ApiClient {
   final String baseUrl;
   String? _token;
 
+  /// Sent as Accept-Language, so the server words its own messages in the language the person chose.
+  String language = 'en';
+
   /// Called when the server says the session is over.
   void Function()? onSignedOut;
 
@@ -164,6 +169,7 @@ class ApiClient {
   Future<void> signIn(String username, String password) async {
     final response = await _send(() => _http.post(
           Uri.parse('$baseUrl/connect/token'),
+          headers: {'Accept-Language': language},
           body: {
             'grant_type': 'password',
             'client_id': 'Helpdesk_Demo',
@@ -174,7 +180,7 @@ class ApiClient {
         ));
     final body = _decode(response);
     if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, (body['error_description'] as String?) ?? 'Invalid user name or password.');
+      throw ApiException(response.statusCode, (body['error_description'] as String?) ?? 'Invalid user name or password.', 'login');
     }
     _token = body['access_token'] as String;
   }
@@ -241,6 +247,7 @@ class ApiClient {
   }
 
   Map<String, String> _headers({bool json = false}) => {
+        'Accept-Language': language,
         if (_token != null) 'Authorization': 'Bearer $_token',
         if (json) 'Content-Type': 'application/json',
       };
@@ -249,7 +256,7 @@ class ApiClient {
     try {
       return await call();
     } on http.ClientException {
-      throw ApiException(0, 'Cannot reach the server. Is the API running?');
+      throw ApiException(0, 'Cannot reach the server. Is the API running?', 'network');
     }
   }
 
@@ -257,7 +264,7 @@ class ApiClient {
     if (response.statusCode == 401 && _token != null) {
       _token = null;
       onSignedOut?.call();
-      throw ApiException(401, 'Your session has expired. Please sign in again.');
+      throw ApiException(401, 'Your session has expired. Please sign in again.', 'expired');
     }
     final body = _decode(response);
     if (response.statusCode >= 400) {

@@ -44,6 +44,10 @@ public class HelpdeskDomainSharedModule : AbpModule
 
         Configure<AbpLocalizationOptions>(options =>
         {
+            // the languages a caller may ask for with Accept-Language (or ?culture=vi); anything else answers in English
+            options.Languages.Add(new LanguageInfo("en", "en", "English"));
+            options.Languages.Add(new LanguageInfo("vi", "vi", "Tiếng Việt"));
+
             options.Resources
                 .Add<HelpdeskResource>("en")
                 .AddBaseTypes(typeof(AbpValidationResource))

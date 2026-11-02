@@ -60,6 +60,7 @@ public class TicketNotificationSubscriber : ITicketChangeSubscriber, ITransientD
                     Code = ticket.Code,
                     Title = ticket.Title,
                     Status = ticket.Status.ToString(),
+                    Priority = ticket.Priority.ToString(),
                     Kind = change.Kind.ToString(),
                     Message = Describe(change.Kind, ticket),
                     ActorId = change.ActorId,

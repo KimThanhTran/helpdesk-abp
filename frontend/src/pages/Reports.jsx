@@ -1,16 +1,17 @@
 import { api } from '../api';
 import { ErrorBox } from '../components/bits';
 import ExportButton from '../components/ExportButton';
-import { priorityLabel, statusLabel } from '../constants';
 import { useLoad } from '../hooks';
+import { useT } from '../i18n';
 import { useTicketChanges } from '../notifications';
 
 function Bars({ title, rows }) {
+  const { t } = useT();
   const max = Math.max(1, ...rows.map((row) => row.count));
   return (
     <section className="card">
       <h2>{title}</h2>
-      {rows.length === 0 ? <p className="empty">Nothing yet.</p> : null}
+      {rows.length === 0 ? <p className="empty">{t('reports.nothing')}</p> : null}
       {rows.map((row) => (
         <div key={row.label} className="bar">
           <span>{row.label}</span>
@@ -23,27 +24,28 @@ function Bars({ title, rows }) {
 }
 
 export default function Reports() {
+  const { t } = useT();
   const { data, error, reload } = useLoad((signal) => api.summary({}, signal), []);
   useTicketChanges(reload);
   if (error && !data) return <ErrorBox error={error} />;
-  if (!data) return <p>Loading…</p>;
+  if (!data) return <p>{t('loading')}</p>;
 
   const hours = data.averageResolutionHours;
   return (
     <>
       <div className="row">
-        <h1>Last 30 days</h1>
+        <h1>{t('reports.title')}</h1>
         <ExportButton fetchFile={api.exportSummary} />
       </div>
       <div className="stats">
-        <div className="card"><strong>{data.total}</strong><span>tickets</span></div>
-        <div className={`card ${data.overdueNow ? 'bad' : ''}`}><strong>{data.overdueNow}</strong><span>overdue now</span></div>
-        <div className={`card ${data.waitingForFirstResponseOverdue ? 'bad' : ''}`}><strong>{data.waitingForFirstResponseOverdue}</strong><span>no answer, past target</span></div>
-        <div className="card"><strong>{hours == null ? '—' : `${hours.toFixed(1)}h`}</strong><span>average to resolve</span></div>
+        <div className="card"><strong>{data.total}</strong><span>{t('reports.tickets')}</span></div>
+        <div className={`card ${data.overdueNow ? 'bad' : ''}`}><strong>{data.overdueNow}</strong><span>{t('reports.overdue')}</span></div>
+        <div className={`card ${data.waitingForFirstResponseOverdue ? 'bad' : ''}`}><strong>{data.waitingForFirstResponseOverdue}</strong><span>{t('reports.noAnswer')}</span></div>
+        <div className="card"><strong>{hours == null ? '—' : t('reports.hours', { n: hours.toFixed(1) })}</strong><span>{t('reports.average')}</span></div>
       </div>
-      <Bars title="By status" rows={data.byStatus.map((row) => ({ label: statusLabel(row.key), count: row.count }))} />
-      <Bars title="By priority" rows={data.byPriority.map((row) => ({ label: priorityLabel(row.key), count: row.count }))} />
-      <Bars title="By category" rows={data.byCategory.map((row) => ({ label: row.key, count: row.count }))} />
+      <Bars title={t('reports.byStatus')} rows={data.byStatus.map((row) => ({ label: t(`status.${row.key}`), count: row.count }))} />
+      <Bars title={t('reports.byPriority')} rows={data.byPriority.map((row) => ({ label: t(`priority.${row.key}`), count: row.count }))} />
+      <Bars title={t('reports.byCategory')} rows={data.byCategory.map((row) => ({ label: row.key, count: row.count }))} />
     </>
   );
 }

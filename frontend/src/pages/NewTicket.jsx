@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { ACCEPTED, MAX_FILES, problemWith } from '../components/Attachments';
+import { ACCEPTED, MAX_FILES, namedProblem, problemWith } from '../components/Attachments';
 import { ErrorBox } from '../components/bits';
 import { formatBytes } from '../download';
 import { useDebounced, useLoad, usePastedImages } from '../hooks';
+import { errorText, useT } from '../i18n';
 
 const MIN_FOR_HINT = 8; // characters in the title before it is worth asking for a suggestion
 
@@ -20,6 +21,7 @@ function Preview({ file }) {
 }
 
 export default function NewTicket() {
+  const { t } = useT();
   const navigate = useNavigate();
   const categories = useLoad((signal) => api.categories(signal), []);
   const [categoryId, setCategoryId] = useState('');
@@ -53,11 +55,11 @@ export default function NewTicket() {
     let problem = null;
     for (const file of chosen) {
       const refusal = problemWith(file, next.length);
-      if (refusal) problem = `${file.name}: ${refusal}`;
+      if (refusal) problem = namedProblem(t, file, refusal);
       else next = [...next, file];
     }
     setFiles(next);
-    setFileProblem(problem ? new Error(problem) : null);
+    setFileProblem(problem);
   };
 
   const choose = (event) => {
@@ -81,10 +83,10 @@ export default function NewTicket() {
         try {
           await api.uploadAttachment(ticket.id, file);
         } catch (failure) {
-          failed.push(`${file.name} (${failure.message})`);
+          failed.push(`${file.name} (${errorText(t, failure)})`);
         }
       }
-      const notice = failed.length ? `The ticket was sent, but ${failed.length === 1 ? 'one image' : `${failed.length} images`} could not be attached: ${failed.join('; ')}. You can add it again below.` : undefined;
+      const notice = failed.length ? t('new.imagesFailed', { count: failed.length, list: failed.join('; ') }) : undefined;
       navigate(`/tickets/${ticket.id}`, { state: notice ? { notice } : undefined });
     } catch (failure) {
       setError(failure);
@@ -94,20 +96,20 @@ export default function NewTicket() {
 
   return (
     <main className="narrow">
-      <h1>New ticket</h1>
+      <h1>{t('new.title')}</h1>
       <form onSubmit={submit} className="card">
-        <label>Title
+        <label>{t('new.subject')}
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required />
         </label>
-        <label>What is going on?
+        <label>{t('new.what')}
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={6} required />
         </label>
-        <label>Category
+        <label>{t('new.category')}
           <select value={categoryId || list[0]?.id || ''} onChange={(e) => setCategoryId(e.target.value)} required>
             {list.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
         </label>
-        <label>Images (optional: choose files or paste a screenshot with Ctrl+V; PNG, JPEG or WebP, up to 5 MB each, {MAX_FILES} per ticket)
+        <label>{t('new.images', { max: MAX_FILES })}
           <input type="file" multiple accept={ACCEPTED.join(',')} onChange={choose} disabled={busy || files.length >= MAX_FILES} />
         </label>
         {files.length > 0 ? (
@@ -116,7 +118,7 @@ export default function NewTicket() {
               <li key={`${file.name}-${index}`}>
                 <Preview file={file} />
                 <span>{file.name} · {formatBytes(file.size)}</span>
-                <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setFiles(files.filter((_, i) => i !== index))} disabled={busy}>×</button>
+                <button type="button" aria-label={t('new.remove', { name: file.name })} onClick={() => setFiles(files.filter((_, i) => i !== index))} disabled={busy}>×</button>
               </li>
             ))}
           </ul>
@@ -124,7 +126,7 @@ export default function NewTicket() {
         <ErrorBox error={fileProblem} />
         {suggested.length > 0 ? (
           <p className="hint">
-            Looks like:{' '}
+            {t('new.looksLike')}{' '}
             {suggested.map((item) => (
               <button key={item.categoryId} type="button" className="link" onClick={() => setCategoryId(item.categoryId)}>
                 {item.name} ({Math.round(item.confidence * 100)}%)
@@ -133,7 +135,7 @@ export default function NewTicket() {
           </p>
         ) : null}
         <ErrorBox error={error ?? categories.error} />
-        <button type="submit" className="primary" disabled={busy || list.length === 0}>{busy ? 'Sending…' : 'Send'}</button>
+        <button type="submit" className="primary" disabled={busy || list.length === 0}>{busy ? t('new.sending') : t('new.send')}</button>
       </form>
     </main>
   );

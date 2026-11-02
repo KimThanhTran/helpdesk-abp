@@ -188,6 +188,11 @@ def main():
     print("\nWho may see and do what")
     expect("bob cannot see alice's ticket (404, not 403)", call("GET", f"/api/app/ticket/{tid}", bob), 404)
     expect("requester cannot claim", call("POST", f"/api/app/ticket/{tid}/claim", alice), 403)
+    status, in_vietnamese = call("POST", f"/api/app/ticket/{tid}/claim", alice, extra_headers={"Accept-Language": "vi"})
+    check("the same refusal comes back in Vietnamese when the caller asks for it",
+          status == 403 and "Vai trò của bạn" in in_vietnamese["error"]["message"], str(in_vietnamese))
+    status, in_english = call("POST", f"/api/app/ticket/{tid}/claim", alice, extra_headers={"Accept-Language": "fr"})
+    check("and in English for a language it does not offer", status == 403 and "Your role" in in_english["error"]["message"], str(in_english))
     expect("agent cannot confirm", call("POST", f"/api/app/ticket/{tid}/confirm", agent), 403)
     conflict = expect("resolving a new ticket is a conflict", call("POST", f"/api/app/ticket/{tid}/resolve", agent, {"resolution": "Done"}), 409)
     check("conflict carries the business code", (conflict or {}).get("error", {}).get("code") == "Helpdesk:Ticket:InvalidTransition")

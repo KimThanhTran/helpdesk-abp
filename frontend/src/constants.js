@@ -19,23 +19,23 @@ export const Action = {
   Cancel: 12,
 };
 
+// English names, for CSS classes and for reading what the server sent; the text people see comes from locales.js
 export const statusLabel = (value) => Object.keys(Status).find((key) => Status[key] === value) ?? String(value);
 export const priorityLabel = (value) => Object.keys(Priority).find((key) => Priority[key] === value) ?? String(value);
 
-export const EventKind = { 1: 'Created', 2: 'Assigned', 3: 'Priority changed', 4: 'Status changed', 5: 'Reopened', 6: 'Closed automatically' };
-
 // What each action needs from the person before it is sent, and the route it calls.
+// Its button text is the key `action.<code>` and its question `prompt.<code>` (see locales.js).
 export const ACTIONS = {
-  [Action.Claim]: { label: 'Take it', path: 'claim' },
-  [Action.Assign]: { label: 'Assign…', path: 'assign', field: 'assignee' },
-  [Action.ChangePriority]: { label: 'Change priority…', path: 'change-priority', field: 'priority' },
-  [Action.Wait]: { label: 'Wait for requester…', path: 'wait', field: 'reason', prompt: 'What do you need from the requester?', body: 'reason' },
-  [Action.Resume]: { label: 'Resume', path: 'resume' },
-  [Action.Resolve]: { label: 'Resolve…', path: 'resolve', field: 'text', prompt: 'How was it resolved?', body: 'resolution' },
-  [Action.Confirm]: { label: 'Confirm it is solved', path: 'confirm', tone: 'good' },
-  [Action.Reject]: { label: 'Not solved…', path: 'reject', field: 'text', prompt: 'What is still wrong?', body: 'reason' },
-  [Action.Reopen]: { label: 'Reopen…', path: 'reopen', field: 'text', prompt: 'Why are you reopening it?', body: 'reason' },
-  [Action.Cancel]: { label: 'Cancel ticket…', path: 'cancel', field: 'text', prompt: 'Why are you cancelling it?', body: 'reason', tone: 'danger' },
+  [Action.Claim]: { path: 'claim' },
+  [Action.Assign]: { path: 'assign', field: 'assignee' },
+  [Action.ChangePriority]: { path: 'change-priority', field: 'priority' },
+  [Action.Wait]: { path: 'wait', field: 'reason', body: 'reason' },
+  [Action.Resume]: { path: 'resume' },
+  [Action.Resolve]: { path: 'resolve', field: 'text', body: 'resolution' },
+  [Action.Confirm]: { path: 'confirm', tone: 'good' },
+  [Action.Reject]: { path: 'reject', field: 'text', body: 'reason' },
+  [Action.Reopen]: { path: 'reopen', field: 'text', body: 'reason' },
+  [Action.Cancel]: { path: 'cancel', field: 'text', body: 'reason', tone: 'danger' },
 };
 
 // Shown in this order; Comment and InternalNote have their own box, not a button

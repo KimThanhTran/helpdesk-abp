@@ -128,11 +128,11 @@ void attachmentTests() {
       expect(attachmentProblem('a.png', 100, 0), isNull);
       expect(attachmentProblem('A.JPG', 100, 4), isNull);
       expect(attachmentProblem('a.webp', maxAttachmentBytes, 0), isNull);
-      expect(attachmentProblem('a.gif', 100, 0), contains('Only PNG, JPEG and WebP'));
-      expect(attachmentProblem('noextension', 100, 0), contains('Only PNG, JPEG and WebP'));
-      expect(attachmentProblem('a.png', 0, 0), contains('empty'));
-      expect(attachmentProblem('a.png', maxAttachmentBytes + 1, 0), contains('too large'));
-      expect(attachmentProblem('a.png', 100, maxAttachments), contains('at most'));
+      expect(attachmentProblem('a.gif', 100, 0), 'attach.type');
+      expect(attachmentProblem('noextension', 100, 0), 'attach.type');
+      expect(attachmentProblem('a.png', 0, 0), 'attach.empty');
+      expect(attachmentProblem('a.png', maxAttachmentBytes + 1, 0), 'attach.big');
+      expect(attachmentProblem('a.png', 100, maxAttachments), 'attach.limit');
     });
 
     test('an upload is a multipart POST with the token, the ticket id and the file name', () async {

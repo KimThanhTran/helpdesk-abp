@@ -26,6 +26,7 @@ The focus of the project is getting the hard parts right and proving it: the tic
 - **A React web UI** ([frontend](frontend)) and **a Flutter app** for requesters ([mobile](mobile/README.md)). Both show exactly the buttons the API lists in `actions`.
 - **Images on tickets.** PNG, JPEG or WebP, up to 5 MB each and five per ticket, on the web UI (choose files or paste a screenshot with Ctrl+V, on the New ticket form or later on the ticket) and in the Flutter app (after the ticket exists). The type is decided from the file's bytes, never from its name, and a requester can neither see nor learn about an agent's internal images.
 - **Excel export.** An agent downloads the queue (with the filters on screen) or the report as a real `.xlsx` file: frozen bold header, filters, real dates.
+- **English and Vietnamese.** A language switch in the web UI header and the Flutter app bar; the choice is remembered (web) or follows the phone (Flutter). The API also answers its own messages in the language it is asked for with `Accept-Language: vi` (or `?culture=vi`), and the UI sends it for you.
 - **Reports:** counts by status, priority and category, average time to resolve, and what is overdue right now.
 - **Google Sheets export** through a Google Apps Script, signed and privacy-first. See [integrations/google-sheets](integrations/google-sheets/README.md).
 
@@ -150,6 +151,7 @@ Routes follow the ABP convention. Every call needs a bearer token.
 | GET | `/api/app/ticket-attachment/{id}/content` | participants | the image itself (404 for internal ones if you are not an agent) |
 | GET | `/api/app/ticket-export/tickets` | agent | `.xlsx` of the tickets that match the queue filters (up to 5,000 rows) |
 | GET | `/api/app/ticket-export/summary` | agent | `.xlsx` of the report, one sheet each for totals, status, priority, category |
+| any | `Accept-Language: en\|vi` | any | the language of error messages and validation texts; anything else answers in English |
 | WS | `/signalr-hubs/tickets` | any | live `ticketChanged` notifications (token as `access_token` query string) |
 
 ## Design decisions
@@ -167,6 +169,8 @@ Routes follow the ABP convention. Every call needs a bearer token.
 | **Images are accepted by their first bytes, not their name or declared type** | A script renamed to `photo.png` is refused (415). The stored name gets the extension of the real type, folders and control characters are stripped, and downloads carry `nosniff` and `Content-Disposition: attachment`. |
 | **Images are separate from the ticket and live in PostgreSQL** | Loading a ticket never loads bytes, and lists are projections without them. One database to back up and no file-permission questions; the cost is a bigger database (see the limitations). |
 | **Excel files are written without a library** | The format is a zip of a few XML files. Text is always a string cell, never a formula, so a title like `=HYPERLINK(...)` stays text; control characters are dropped and long cells cut to Excel's limit. Checked by opening the real output with openpyxl. |
+| **Texts live in one dictionary per language, and a test fails if they drift** | Every UI text and every server error code must exist in English and Vietnamese with the same `{placeholders}`; a missing or untranslated one turns the build red instead of showing English by accident. |
+| **Notifications say what changed; the client words it** | A SignalR message carries the kind, status and priority, not a finished sentence, so each person reads it in the language they have chosen now. |
 | **Enums are stored and sent as numbers** | Renaming a value can never change the meaning of stored data. |
 
 ### Two bugs the unit tests could not find
@@ -180,13 +184,13 @@ Running the whole stack against PostgreSQL, with real HTTP and real tokens, foun
 
 | Layer | Tests | What it proves |
 | --- | ---: | --- |
-| Domain (xUnit, no database) | 271 | the state machine guard by guard, the policy table against the aggregate for all 72 status × action pairs, the SLA calendar (weekends, holidays, time zones, pauses), the triage index, which bytes count as an image and which names are safe |
+| Domain (xUnit, no database) | 275 | the state machine guard by guard, the policy table against the aggregate for all 72 status × action pairs, the SLA calendar (weekends, holidays, time zones, pauses), the triage index, which bytes count as an image and which names are safe, and that English and Vietnamese have the same error texts |
 | Application (123 against SQLite, 38 plain) | 161 | real seeded users and real permission checks: workflow, 403/404/409, internal-note and internal-image privacy, SLA pause, notifications, triage, attachments, Excel export, the demo data, lists and paging, categories, reports, roles, the Sheets export, and rules about the shape of the code (every service needs a permission); the Excel writer is checked by reading the files back |
 | PostgreSQL (Testcontainers) | 4 | the migrations apply, the model matches them, ticket numbers survive 50 simultaneous requests |
 | Google Apps Script (Node, fakes of Google) | 23 | signatures, replay, tampering, idempotency, ordering |
-| Web UI (Vitest) | 82 | the API client's errors, routes, uploads and downloads, SLA wording, notifications, the ticket page's buttons, attaching images (what is refused before upload, creating a ticket with images and what happens when one fails), pasting screenshots, Excel export buttons |
-| Flutter (`flutter test`) | 20 | the API client, the sign-in, open and confirm flow, attaching images against a fake server |
-| End to end (`scripts/smoke_test.py`) | 68 checks | the whole Docker stack over HTTP, including real multipart uploads, a 5 MB limit, and opening the downloaded `.xlsx` (more checks when the Sheets stand-in is attached) |
+| Web UI (Vitest) | 104 | the API client's errors, routes, uploads and downloads, SLA wording, notifications, the ticket page's buttons, attaching images (what is refused before upload, creating a ticket with images and what happens when one fails), pasting screenshots, Excel export buttons, the language switch and that both dictionaries match |
+| Flutter (`flutter test`) | 33 | the API client, the sign-in, open and confirm flow, attaching images and switching language against a fake server |
+| End to end (`scripts/smoke_test.py`) | 70 checks | the whole Docker stack over HTTP, including real multipart uploads, a 5 MB limit, opening the downloaded `.xlsx`, and an error answered in Vietnamese (more checks when the Sheets stand-in is attached) |
 
 The tests were also checked the other way round: deliberately breaking a guard, the internal-note filter, the "not your ticket" check and the replay protection each turned tests red.
 
@@ -228,7 +232,8 @@ docker-compose.yml
 - **The auto-close worker runs in every API instance.** With several instances, register it in one or guard it with a distributed lock. SignalR would also need a backplane to work across instances.
 - **Demo-grade deployment.** The compose file uses development signing keys (tokens stop working after a restart), plain HTTP on localhost, and published demo passwords. Production needs a real certificate, HTTPS, secrets from a vault and `SeedDemoData=false`. Swagger is on in every environment.
 - **Not covered by tests:** HTTP status mapping is checked only by the end-to-end script; load and security testing have not been done. The build reports a known vulnerability in a transitive package (`System.Security.Cryptography.Xml`) that comes with ABP and has not been upgraded here.
-- The user interface language is English only, and there is no multi-tenancy (switched off).
+- **Only English and Vietnamese.** The Vietnamese wording was written without a native review: read it and correct what sounds wrong (it is in `frontend/src/locales.js`, `mobile/lib/strings.dart` and `backend/src/Helpdesk.Domain.Shared/Localization/Helpdesk/vi.json`). Data is not translated: category names, ticket titles, comments and the demo tickets stay as written, enum words that the server puts into an error (for example the status in "the ticket is Closed and cannot be changed") stay English, the login error uses the app's own wording because the sign-in server's is English only, and dates use the chosen language's format but the browser's time zone. Flutter does not remember the chosen language between launches.
+- There is no multi-tenancy (switched off).
 
 ## Credits
 

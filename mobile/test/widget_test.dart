@@ -31,9 +31,11 @@ class Fake {
   int status = 4;
   final posts = <String>[];
   final images = <String>[]; // names of the attachments on the ticket
+  final languages = <String>[]; // the Accept-Language of each request
 
   Future<http.Response> handle(http.Request request) async {
     final path = request.url.path;
+    languages.add(request.headers['Accept-Language'] ?? '');
     if (request.method == 'POST') posts.add(path);
     if (path == '/api/app/ticket-attachment') {
       return json(200, {
@@ -67,11 +69,12 @@ class Fake {
   }
 }
 
-Future<Fake> start(WidgetTester tester, {PickImage? pick}) async {
+Future<Fake> start(WidgetTester tester, {PickImage? pick, String? language}) async {
   final fake = Fake();
   await tester.pumpWidget(HelpdeskApp(
     api: ApiClient(baseUrl: 'http://api', client: MockClient(fake.handle)),
     pickImage: pick ?? () async => null,
+    language: language,
   ));
   return fake;
 }
@@ -87,7 +90,7 @@ Future<void> openTicket(WidgetTester tester) async {
 Future<void> signIn(WidgetTester tester, String password) async {
   await tester.enterText(find.byKey(const Key('user')), 'alice');
   await tester.enterText(find.byKey(const Key('password')), password);
-  await tester.tap(find.text('Sign in'));
+  await tester.tap(find.byType(FilledButton)); // the sign-in button, whatever language it is written in
   await tester.pumpAndSettle();
 }
 
@@ -95,7 +98,7 @@ void main() {
   testWidgets('a wrong password shows the server message and stays on the sign-in page', (tester) async {
     await start(tester);
     await signIn(tester, 'bad');
-    expect(find.text('Invalid username or password!'), findsOneWidget);
+    expect(find.text('Invalid user name or password.'), findsOneWidget); // the app's own wording, not the server's
     expect(find.text('My tickets'), findsNothing);
   });
 
@@ -189,6 +192,60 @@ void main() {
 
       expect(find.byKey(const Key('add-image')), findsNothing);
       expect(find.text('1.png'), findsOneWidget); // what is there stays visible
+    });
+  });
+
+  group('language', () {
+    testWidgets('the sign-in page can be switched to Vietnamese and back', (tester) async {
+      await start(tester);
+      expect(find.text('Sign in'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('language')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('language-vi')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Đăng nhập'), findsOneWidget);
+      expect(find.text('Tên đăng nhập'), findsOneWidget);
+      expect(find.text('Sign in'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('language')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('language-en')));
+      await tester.pumpAndSettle();
+      expect(find.text('Sign in'), findsOneWidget);
+    });
+
+    testWidgets('statuses, buttons and errors follow the language, and the server is asked in it too', (tester) async {
+      final fake = await start(tester, language: 'vi');
+      await signIn(tester, 'bad');
+      expect(find.text('Sai tên đăng nhập hoặc mật khẩu.'), findsOneWidget);
+      expect(fake.languages.last, 'vi'); // the sign-in request carried Accept-Language
+
+      await signIn(tester, 'good');
+      expect(find.text('Phiếu của tôi'), findsOneWidget);
+      expect(find.textContaining('Đã giải quyết'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('ticket-HD-1')));
+      await tester.pumpAndSettle();
+      expect(find.text('Đã giải quyết'), findsOneWidget);
+      expect(find.text('Xác nhận đã giải quyết'), findsOneWidget);
+      expect(find.text('Chưa có ảnh nào.'), findsOneWidget);
+      expect(fake.languages.last, 'vi');
+    });
+
+    testWidgets('a language chosen on one screen applies to the screens already open', (tester) async {
+      await start(tester);
+      await openTicket(tester);
+      expect(find.text('Confirm it is solved'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('language')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('language-vi')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Xác nhận đã giải quyết'), findsOneWidget);
+      expect(find.text('Confirm it is solved'), findsNothing);
     });
   });
 }

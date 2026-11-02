@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Action, Visibility } from '../constants';
 import { formatBytes } from '../download';
-import { formatDate } from '../format';
 import { useLoad, usePastedImages } from '../hooks';
+import { UiError, useT } from '../i18n';
 import { useTicketChanges } from '../notifications';
 import { ErrorBox } from './bits';
 
@@ -12,17 +12,23 @@ export const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp'];
 export const MAX_BYTES = 5 * 1024 * 1024;
 export const MAX_FILES = 5;
 
-/** Why a file cannot be attached, or null when it looks fine. */
+/** Why a file cannot be attached (a UiError the page words in the chosen language), or null when it looks fine. */
 export function problemWith(file, count) {
-  if (count >= MAX_FILES) return `A ticket can hold at most ${MAX_FILES} images.`;
-  if (!ACCEPTED.includes(file.type)) return 'Only PNG, JPEG and WebP images can be attached.';
-  if (file.size > MAX_BYTES) return `The image is too large (${formatBytes(file.size)}). The limit is 5 MB.`;
-  if (file.size === 0) return 'The file is empty.';
+  if (count >= MAX_FILES) return new UiError('attach.limit', { max: MAX_FILES });
+  if (!ACCEPTED.includes(file.type)) return new UiError('attach.type');
+  if (file.size > MAX_BYTES) return new UiError('attach.big', { size: formatBytes(file.size) });
+  if (file.size === 0) return new UiError('attach.empty');
   return null;
+}
+
+/** "name: reason", worded in the language the person uses now. */
+export function namedProblem(t, file, problem) {
+  return new UiError('attach.named', { name: file.name, problem: t(problem.key, problem.params) });
 }
 
 /** An image fetched with the sign-in token (an <img src> cannot send one) and shown from memory. */
 function Thumbnail({ attachment }) {
+  const { t } = useT();
   const [url, setUrl] = useState(null);
   const [failed, setFailed] = useState(false);
 
@@ -41,16 +47,17 @@ function Thumbnail({ attachment }) {
     };
   }, [attachment.id]);
 
-  if (failed) return <span className="thumb missing">Cannot load</span>;
+  if (failed) return <span className="thumb missing">{t('img.cannotLoad')}</span>;
   if (!url) return <span className="thumb missing">…</span>;
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="thumb" title="Open full size">
+    <a href={url} target="_blank" rel="noreferrer" className="thumb" title={t('img.open')}>
       <img src={url} alt={attachment.fileName} />
     </a>
   );
 }
 
 export default function Attachments({ ticket }) {
+  const { t, formatDate } = useT();
   const { data, error, reload } = useLoad((signal) => api.attachments(ticket.id, signal), [ticket.id]);
   useTicketChanges((change) => change.ticketId === ticket.id && reload());
   const [problem, setProblem] = useState(null);
@@ -60,7 +67,6 @@ export default function Attachments({ ticket }) {
   const items = data?.items ?? [];
   const canPublic = ticket.actions.includes(Action.Comment);
   const canInternal = ticket.actions.includes(Action.InternalNote);
-
   const canUpload = canPublic || canInternal;
 
   /** Chosen with the file dialog or pasted: check each one, upload the good ones, say what was wrong with the rest. */
@@ -73,7 +79,7 @@ export default function Attachments({ ticket }) {
       for (const file of files) {
         const refusal = problemWith(file, count);
         if (refusal) {
-          setProblem(new Error(`${file.name}: ${refusal}`));
+          setProblem(namedProblem(t, file, refusal));
           continue;
         }
         await api.uploadAttachment(ticket.id, file, internal || !canPublic);
@@ -97,33 +103,33 @@ export default function Attachments({ ticket }) {
 
   usePastedImages((files) => !busy && attach(files), canUpload);
 
-  if (items.length === 0 && !canPublic && !canInternal) return null;
+  if (items.length === 0 && !canUpload) return null;
   return (
-    <section aria-label="Images">
-      <h2>Images</h2>
+    <section aria-label={t('img.title')}>
+      <h2>{t('img.title')}</h2>
       <ErrorBox error={error} />
-      {items.length === 0 ? <p className="empty">No images yet.</p> : null}
+      {items.length === 0 ? <p className="empty">{t('img.none')}</p> : null}
       <ul className="gallery">
         {items.map((attachment) => (
           <li key={attachment.id}>
             <Thumbnail attachment={attachment} />
             <span className="caption">
               <strong className="name">{attachment.fileName}</strong>
-              {attachment.visibility === Visibility.Internal ? <span className="badge">Internal</span> : null}
+              {attachment.visibility === Visibility.Internal ? <span className="badge">{t('img.internal')}</span> : null}
               <br />{formatBytes(attachment.size)} · {attachment.uploader.name} · {formatDate(attachment.creationTime)}
             </span>
           </li>
         ))}
       </ul>
-      {canPublic || canInternal ? (
+      {canUpload ? (
         <div className="card upload">
-          <label>Attach an image, or paste a screenshot with Ctrl+V (PNG, JPEG or WebP, up to 5 MB, {MAX_FILES} per ticket)
+          <label>{t('img.attach', { max: MAX_FILES })}
             <input type="file" multiple accept={ACCEPTED.join(',')} onChange={choose} disabled={busy || items.length >= MAX_FILES} />
           </label>
           {canInternal && canPublic ? (
-            <label className="check"><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> Internal (the requester will not see it)</label>
+            <label className="check"><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> {t('img.internalCheck')}</label>
           ) : null}
-          {busy ? <p>Uploading…</p> : null}
+          {busy ? <p>{t('img.uploading')}</p> : null}
           <ErrorBox error={problem} />
         </div>
       ) : null}

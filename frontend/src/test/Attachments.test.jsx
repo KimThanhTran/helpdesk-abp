@@ -28,16 +28,16 @@ describe('problemWith', () => {
     [image('a.png'), 0, null],
     [image('a.jpg', 'image/jpeg'), 4, null],
     [image('a.webp', 'image/webp'), 0, null],
-    [image('a.gif', 'image/gif'), 0, /Only PNG, JPEG and WebP/],
-    [image('evil.png', 'text/html'), 0, /Only PNG, JPEG and WebP/],
-    [image('a.png', 'image/png', MAX_BYTES + 1), 0, /too large/],
+    [image('a.gif', 'image/gif'), 0, 'attach.type'],
+    [image('evil.png', 'text/html'), 0, 'attach.type'],
+    [image('a.png', 'image/png', MAX_BYTES + 1), 0, 'attach.big'],
     [image('a.png', 'image/png', MAX_BYTES), 0, null],
-    [image('a.png', 'image/png', 0), 0, /empty/],
-    [image('a.png'), 5, /at most 5/],
-  ])('%#', (file, count, expected) => {
+    [image('a.png', 'image/png', 0), 0, 'attach.empty'],
+    [image('a.png'), 5, 'attach.limit'],
+  ])('%#', (file, count, key) => {
     const result = problemWith(file, count);
-    if (expected === null) expect(result).toBeNull();
-    else expect(result).toMatch(expected);
+    if (key === null) expect(result).toBeNull();
+    else expect(result.key).toBe(key);
   });
 });
 

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api';
 import { Action, Priority, Status, Visibility } from '../constants';
@@ -93,5 +93,28 @@ describe('Ticket page', () => {
     show({ id: 'alice', isAgent: false }, ticket([Action.Comment]));
     await screen.findByText('Add a comment');
     expect(api.suggestion).not.toHaveBeenCalled();
+  });
+});
+
+describe('Ticket page notice', () => {
+  it('is shown once and then dropped from the history entry, so a reload does not repeat it', async () => {
+    let seen;
+    function Spy() {
+      seen = useLocation();
+      return null;
+    }
+    vi.spyOn(auth, 'useAuth').mockReturnValue({ user: { id: 'alice', isAgent: false } });
+    vi.spyOn(api, 'ticket').mockResolvedValue(ticket([Action.Comment]));
+    vi.spyOn(api, 'attachments').mockResolvedValue({ items: [] });
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/tickets/t1', state: { notice: 'One image failed.' } }]}>
+        <Spy />
+        <Routes><Route path="/tickets/:id" element={<Ticket />} /></Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent('One image failed.');
+    await waitFor(() => expect(seen.state).toBeNull());
+    expect(screen.getByRole('status')).toHaveTextContent('One image failed.'); // still on screen for this visit
   });
 });
