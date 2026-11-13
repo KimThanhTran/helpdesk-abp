@@ -8,6 +8,13 @@
 
 A support desk built on the [ABP Framework](https://abp.io): people raise tickets, agents pick them up from a queue and work them to a close, and managers can follow everything in a Google Sheet. It is a REST API with a PostgreSQL database, a React web UI with live notifications, and a Flutter app for requesters.
 
+**Try it online (free hosting, so be patient):**
+
+- Web UI: <https://kimthanhtran.github.io/helpdesk-abp/> (sign in as `alice`, a requester, or `agent1`, an agent; password `1q2w3E*`, shown on the sign-in page)
+- API with Swagger: <https://helpdesk-api-yq3g.onrender.com/swagger>
+
+The API sleeps when nobody has used it for 15 minutes, so the first request can take about a minute. The accounts are public demo accounts: anyone can read and change what is in there, so do not type anything private. The database on Render's free plan is deleted 30 days after it was created (set up on 2026-11-13); if the link stops working after that, the steps to recreate it are in [docs/deploy.md](docs/deploy.md).
+
 ![A requester writes a ticket: the category is suggested while typing, an image is attached, and the page switches to Vietnamese](docs/demo.gif)
 
 ![An agent's view of a ticket: the actions the server allows, suggestions from similar closed tickets, and the attached images (one internal)](docs/agent-ticket.jpg)
