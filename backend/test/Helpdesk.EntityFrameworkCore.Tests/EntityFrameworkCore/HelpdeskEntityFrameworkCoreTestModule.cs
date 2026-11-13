@@ -23,6 +23,8 @@ public class HelpdeskEntityFrameworkCoreTestModule : AbpModule
 
     public override void ConfigureServices(ServiceConfigurationContext context)
     {
+        // the suggestions' index is rebuilt on every request in tests, so a ticket created a line earlier is already in it
+        Configure<HelpdeskOptions>(options => options.TriageCacheSeconds = 0);
         Configure<FeatureManagementOptions>(options =>
         {
             options.SaveStaticFeaturesToDatabase = false;

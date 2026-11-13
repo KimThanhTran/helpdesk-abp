@@ -17,6 +17,7 @@ services:
 
   db:
     image: postgres:16-alpine
+    command: ["postgres", "-c", "max_connections=300"] # the default 100 is what one API instance's pool alone can fill
     environment:
       POSTGRES_DB: Helpdesk
       POSTGRES_USER: helpdesk
@@ -53,7 +54,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      ConnectionStrings__Default: "Host=db;Port=5432;Database=Helpdesk;User ID=helpdesk;Password=${POSTGRES_PASSWORD:-helpdesk-demo-only}"
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=Helpdesk;User ID=helpdesk;Password=${POSTGRES_PASSWORD:-helpdesk-demo-only};Maximum Pool Size=150"
       App__SelfUrl: "http://localhost:8080"
       AuthServer__Authority: "http://localhost:8080"
       AuthServer__RequireHttpsMetadata: "false" # plain HTTP is fine on localhost; keep it true behind a real domain

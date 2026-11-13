@@ -17,6 +17,12 @@ public class HelpdeskOptions
     /// <summary>With the demo data, also create a dozen finished tickets so the suggestions have history to learn from.</summary>
     public bool SeedDemoTickets { get; set; }
 
+    /// <summary>
+    /// How long the ticket suggestions' search index is kept before it is rebuilt. A new ticket shows up in the
+    /// suggestions after at most this long. 0 rebuilds it on every request (what the tests use).
+    /// </summary>
+    public int TriageCacheSeconds { get; set; } = 15;
+
     public SheetsOptions Sheets { get; set; } = new();
 }
 

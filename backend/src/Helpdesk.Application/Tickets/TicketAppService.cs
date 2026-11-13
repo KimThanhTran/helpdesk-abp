@@ -50,12 +50,19 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
     public async Task<TicketDto> CreateAsync(CreateTicketDto input)
     {
         var actor = await GetActorAsync();
+
+        // Everything the answer needs is read before the ticket number is taken. The number is a row lock held until
+        // the commit (so a lost transaction leaves no gap), which makes creating tickets a queue: the less happens
+        // while it is held, the more tickets per second. Between taking it and committing there are now two statements.
+        var names = await NamesAsync(new[] { actor.UserId });
+        var categories = await CategoryNamesAsync(new[] { input.CategoryId });
+
         var ticket = await _manager.CreateAsync(
             actor.UserId, input.CategoryId, input.Title, input.Description, TicketPriority.Normal);
 
         await _tickets.InsertAsync(ticket, autoSave: true);
         await _eventBus.PublishAsync(new TicketChangedEventData(ticket.Id, TicketEventKind.Created, actor.UserId));
-        return await ToDtoAsync(ticket, actor);
+        return BuildDto(ticket, actor, names, categories);
     }
 
     public async Task<TicketDto> GetAsync(Guid id)
@@ -269,8 +276,13 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
         ids.UnionWith(ticket.Events.Where(e => e.ActorId is not null).Select(e => e.ActorId!.Value));
         ids.UnionWith(ticket.Events.Where(e => e.AssigneeId is not null).Select(e => e.AssigneeId!.Value));
 
-        var names = await NamesAsync(ids);
-        var categories = await CategoryNamesAsync(new[] { ticket.CategoryId });
+        return BuildDto(ticket, actor, await NamesAsync(ids), await CategoryNamesAsync(new[] { ticket.CategoryId }));
+    }
+
+    /// <summary>Maps a ticket without any query of its own, so it can be done while a lock is held without lengthening it.</summary>
+    private TicketDto BuildDto(
+        Ticket ticket, TicketActor actor, IReadOnlyDictionary<Guid, string> names, IReadOnlyDictionary<Guid, string> categories)
+    {
         var now = Clock.Now;
 
         var dto = ToListItem(new TicketDto(), ticket, names, categories, now);

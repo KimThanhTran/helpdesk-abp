@@ -199,6 +199,8 @@ The tests were also checked the other way round: deliberately breaking a guard, 
 
 The web UI and the Flutter app were also driven by hand in Chrome against the real stack, which found two bugs no test had. The second one: demo tickets seeded with their deadlines in the year 0001 (a priority change measured the SLA from a creation time that did not exist yet), which only showed when the Excel export refused to write such a date. The seeder now saves first, the manager refuses to measure a deadline from an unsaved ticket, and the export leaves impossible dates empty. The first: a browser that holds an `XSRF-TOKEN` cookie from another ABP app on `localhost` got an empty 400 on every POST, because ABP's automatic anti-forgery check ran on a bearer-token API. The check is now off (nothing here is authenticated by cookie) and the smoke test covers it.
 
+A [k6 load test](docs/load-test.md) (`scripts/load/run.sh`) found that 200 people at once made creating a ticket take 8 seconds, and why: the suggestions rebuilt their index on every request, which used up the processor, and the ticket-number lock queued the creates behind it. After the fix a create takes 0.29 s at that load; the number lock is still the limit and the page says so.
+
 CI runs the backend, the Apps Script, the web UI, the Flutter app and the end-to-end script on every push (`.github/workflows/ci.yml`).
 
 ## Project structure
@@ -227,7 +229,7 @@ docker-compose.yml
 
 - **The live demo needs your own accounts.** Everything for it is in the repository ([docs/deploy.md](docs/deploy.md), `render.yaml`, the Pages workflow), but it has not been deployed: Render, Neon and GitHub Pages sign-ups cannot be done for you. A free API sleeps after 15 minutes idle and takes about a minute to wake.
 - **The web UI keeps its token in `sessionStorage`**, which any script on the page can read; a production setup would use an HttpOnly cookie. The Flutter app keeps it in memory only, has no live updates and no agent screens, and its Android project has not been built on a device.
-- **The triage is a keyword index, not a language model.** It rebuilds from the 2,000 newest tickets on every call and knows nothing about synonyms; it is useful and easy to explain, not accurate.
+- **The triage is a keyword index, not a language model.** It is built from the 2,000 newest tickets, kept for 15 seconds (a new ticket shows up in the suggestions after at most that long) and knows nothing about synonyms; it is useful and easy to explain, not accurate.
 - **Notifications are not stored.** A person who is offline when a change happens never hears about it, and the bell forgets on reload. There is no e-mail or push.
 - **Images only, and stored in PostgreSQL.** No PDFs or documents. Five 5 MB images per ticket is at most 25 MB a ticket in the database; move them to object storage (S3, Azure Blob) before volume matters. The server checks the first bytes, not the whole image: it does not decode, re-encode or strip metadata, so a camera photo keeps its GPS tags and a file with a PNG header and garbage after it is accepted.
 - **Excel export is a snapshot in UTC.** At most 5,000 rows, built in memory, with titles and names (the agent asked for them; the Google Sheets export leaves them out by default). Opened with openpyxl, not with Excel itself.

@@ -5,6 +5,7 @@ using Helpdesk.Categories;
 using Helpdesk.Permissions;
 using Helpdesk.Tickets;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 using Volo.Abp.Domain.Repositories;
 
 namespace Helpdesk.Triage;
@@ -16,7 +17,8 @@ namespace Helpdesk.Triage;
 [Authorize(HelpdeskPermissions.Tickets.Create)]
 public class TicketTriageAppService : HelpdeskAppService, ITicketTriageAppService
 {
-    // shortcut: rebuilt per request, fine up to a few thousand tickets; cache it and refresh on change when that hurts
+    // shortcut: the newest 2,000 tickets, kept for HelpdeskOptions.TriageCacheSeconds; a real index (full-text search,
+    // embeddings) is the next step once the history is larger than that or needs more than keywords
     private const int CorpusSize = 2000;
     private const int Neighbours = 7;
     private const double NeighbourFloor = 0.05;
@@ -26,11 +28,16 @@ public class TicketTriageAppService : HelpdeskAppService, ITicketTriageAppServic
 
     private readonly IRepository<Ticket, Guid> _tickets;
     private readonly IRepository<Category, Guid> _categories;
+    private readonly TriageCorpusCache _cache;
+    private readonly HelpdeskOptions _options;
 
-    public TicketTriageAppService(IRepository<Ticket, Guid> tickets, IRepository<Category, Guid> categories)
+    public TicketTriageAppService(
+        IRepository<Ticket, Guid> tickets, IRepository<Category, Guid> categories, TriageCorpusCache cache, IOptions<HelpdeskOptions> options)
     {
         _tickets = tickets;
         _categories = categories;
+        _cache = cache;
+        _options = options.Value;
     }
 
     public async Task<TriageSuggestionDto> GetSuggestionAsync(GetTriageInput input)
@@ -42,22 +49,14 @@ public class TicketTriageAppService : HelpdeskAppService, ITicketTriageAppServic
             return suggestion;
         }
 
-        var corpus = await AsyncExecuter.ToListAsync(
-            (await _tickets.GetQueryableAsync())
-                .OrderByDescending(ticket => ticket.CreationTime)
-                .Take(CorpusSize)
-                .Select(ticket => new
-                {
-                    ticket.Id, ticket.Code, ticket.Title, ticket.Description, ticket.CategoryId, ticket.Status, ticket.Resolution,
-                }));
-        if (corpus.Count == 0)
+        var corpus = await _cache.GetAsync(BuildCorpusAsync, TimeSpan.FromSeconds(_options.TriageCacheSeconds), DateTime.UtcNow);
+        if (corpus.Index is null)
         {
             return suggestion;
         }
 
-        var index = new TfIdfIndex(corpus.Select(ticket => (ticket.Id, Text(ticket.Title, ticket.Description))));
-        var byId = corpus.ToDictionary(ticket => ticket.Id);
-        var matches = index.Search(query, take: 10, exclude: input.ExcludeTicketId);
+        var byId = corpus.ById;
+        var matches = corpus.Index.Search(query, take: 10, exclude: input.ExcludeTicketId);
 
         suggestion.Categories = await SuggestCategoriesAsync(matches.Take(Neighbours)
             .Where(match => match.Score >= NeighbourFloor)
@@ -101,6 +100,20 @@ public class TicketTriageAppService : HelpdeskAppService, ITicketTriageAppServic
         }
 
         return suggestion;
+    }
+
+    private async Task<TriageCorpus> BuildCorpusAsync()
+    {
+        var docs = await AsyncExecuter.ToListAsync(
+            (await _tickets.GetQueryableAsync())
+                .OrderByDescending(ticket => ticket.CreationTime)
+                .Take(CorpusSize)
+                .Select(ticket => new TriageDoc(
+                    ticket.Id, ticket.Code, ticket.Title, ticket.Description, ticket.CategoryId, ticket.Status, ticket.Resolution)));
+
+        return new TriageCorpus(
+            docs.ToDictionary(doc => doc.Id),
+            docs.Count == 0 ? null : new TfIdfIndex(docs.Select(doc => (doc.Id, Text(doc.Title, doc.Description)))));
     }
 
     /// <summary>Each close ticket votes for its category with its similarity; only enabled categories are offered.</summary>
