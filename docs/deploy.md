@@ -21,6 +21,9 @@ To keep the data longer than 30 days, use a database that lasts (Neon, or a paid
 `ConnectionStrings__Default` on the service to its connection string in Npgsql form
 (`Host=…;Port=5432;Database=…;User ID=…;Password=…;SSL Mode=Require`). It takes precedence over `DATABASE_URL`.
 
+`render.yaml` also generates `OpenIddict__KeySecret`: the keys that sign and encrypt tokens are derived from it, so people stay
+signed in when the free API goes to sleep and wakes. Without it every start makes new keys and signs everyone out.
+
 ## 2. UI
 
 1. In the repository settings choose **Pages → Source: GitHub Actions**.

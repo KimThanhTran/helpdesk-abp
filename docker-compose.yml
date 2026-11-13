@@ -59,6 +59,8 @@ services:
       AuthServer__Authority: "http://localhost:8080"
       AuthServer__RequireHttpsMetadata: "false" # plain HTTP is fine on localhost; keep it true behind a real domain
       AuthServer__SwaggerClientId: "Helpdesk_Demo" # Swagger signs in with the demo client (password flow)
+      # a fixed secret (24+ characters) keeps tokens valid across restarts; empty makes new keys at every start
+      OpenIddict__KeySecret: "${KEY_SECRET:-}"
       App__CorsOrigins: "http://localhost:5001" # the Flutter web build (mobile/README.md); the UI on :3000 goes through nginx and needs no CORS
       # Google Sheets export: off unless both values are set (see integrations/google-sheets/README.md)
       Helpdesk__Sheets__WebhookUrl: "${SHEETS_WEBHOOK_URL:-}"

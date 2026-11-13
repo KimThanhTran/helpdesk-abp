@@ -42,3 +42,6 @@ services:
         value: "true"
       - key: StringEncryption__DefaultPassPhrase
         generateValue: true
+      # signs and encrypts the access tokens; without a fixed one every wake-up from sleep would sign everybody out
+      - key: OpenIddict__KeySecret
+        generateValue: true

@@ -12,6 +12,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Helpdesk.Data;
 using Helpdesk.EntityFrameworkCore;
+using Helpdesk.Hosting;
+using Microsoft.IdentityModel.Tokens;
+using OpenIddict.Server;
+using Volo.Abp.OpenIddict;
 using Helpdesk.MultiTenancy;
 using Volo.Abp.AspNetCore.Mvc.UI.Theme.LeptonXLite;
 using Volo.Abp.AspNetCore.Mvc.UI.Theme.LeptonXLite.Bundling;
@@ -58,6 +62,19 @@ public class HelpdeskHttpApiHostModule : AbpModule
 {
     public override void PreConfigureServices(ServiceConfigurationContext context)
     {
+        // With OpenIddict:KeySecret set, the keys that sign and encrypt tokens come from that secret instead of being made
+        // anew at every start, so tokens survive a restart (and a free host going to sleep). Left empty, nothing changes.
+        var keySecret = context.Services.GetConfiguration()["OpenIddict:KeySecret"];
+        if (!string.IsNullOrWhiteSpace(keySecret))
+        {
+            PreConfigure<AbpOpenIddictAspNetCoreOptions>(options => options.AddDevelopmentEncryptionAndSigningCertificate = false);
+            PreConfigure<OpenIddictServerBuilder>(builder =>
+            {
+                builder.AddSigningKey(new RsaSecurityKey(TokenKeys.DeriveRsa(keySecret)));
+                builder.AddEncryptionKey(new SymmetricSecurityKey(TokenKeys.Derive(keySecret, "encryption")));
+            });
+        }
+
         PreConfigure<OpenIddictBuilder>(builder =>
         {
             builder.AddValidation(options =>
