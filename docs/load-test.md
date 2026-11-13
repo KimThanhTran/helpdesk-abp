@@ -16,7 +16,7 @@ One laptop (16 logical processors, Docker Desktop), the API in one container wit
 averages, with the 95th percentile in brackets. These numbers say how the code behaves on that machine; they do not
 promise anything about yours.
 
-| | 20 people at once | 200 people, before the fixes below | 200 people, now |
+| | 20 people at once | 200 people, without the index cache | 200 people, now |
 | --- | ---: | ---: | ---: |
 | Requests per second | 55 | 236 | 437 |
 | Open the queue | 26 ms (23) | 290 ms (1,080) | 112 ms (269) |
@@ -46,6 +46,10 @@ Two measurements showed what, instead of a guess:
   commit, on purpose: if a transaction is lost the number is not skipped. That makes creating tickets a queue, and with
   the processor exhausted the transaction holding the lock was slow to finish, so everyone behind it waited. Creating now
   reads everything the answer needs *before* taking the number, so only two statements run while the lock is held.
+
+Which of the two mattered: the middle column already has the second change (the run with only that change took 8.2 s for a
+create on average, no better than before it), and the right column adds the cache. So the cache is what removed the delay,
+and the shorter lock is a sound change whose own effect was not measured.
 
 The number lock is still the limit for creating tickets. At 200 people the 95th percentile of a create is 1 second, over
 the 500 ms the test asks for, so that threshold is crossed in the 200-person run (the other seven routes pass, and so do the error-rate and check thresholds). Giving up
