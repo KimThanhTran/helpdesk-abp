@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { Priority, Status } from '../constants';
 import { useAuth } from '../auth';
 import { LanguageSwitch, useT } from '../i18n';
+import { ThemeSwitch } from '../theme';
 import { useNotifications } from '../notifications';
 
 /**
@@ -92,6 +93,7 @@ export default function Layout() {
         </nav>
         <div className="who">
           <LanguageSwitch />
+          <ThemeSwitch />
           <Bell />
           <span>{user.isAgent ? t('user.agent', { name: user.name }) : user.name}</span>
           <button type="button" onClick={signOut}>{t('nav.signOut')}</button>

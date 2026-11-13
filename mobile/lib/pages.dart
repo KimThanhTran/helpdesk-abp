@@ -79,7 +79,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final s = Strings.of(context);
     return Scaffold(
-      appBar: AppBar(actions: const [LanguageMenu()]),
+      appBar: AppBar(actions: const [ThemeButton(), LanguageMenu()]),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 380),
@@ -145,6 +145,7 @@ class _TicketsPageState extends State<TicketsPage> {
     final s = Strings.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(s.t('tickets.title')), actions: [
+        const ThemeButton(),
         const LanguageMenu(),
         IconButton(tooltip: s.t('nav.signOut'), icon: const Icon(Icons.logout), onPressed: widget.onSignOut),
       ]),
@@ -260,7 +261,7 @@ class _NewTicketPageState extends State<NewTicketPage> {
     final s = Strings.of(context);
     final suggested = _categories.where((c) => c.id == _suggestedId).firstOrNull;
     return Scaffold(
-      appBar: AppBar(title: Text(s.t('tickets.new')), actions: const [LanguageMenu()]),
+      appBar: AppBar(title: Text(s.t('tickets.new')), actions: const [ThemeButton(), LanguageMenu()]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         TextField(key: const Key('title'), controller: _title, onChanged: _typed, decoration: InputDecoration(labelText: s.t('new.title'))),
         const SizedBox(height: 12),
@@ -387,7 +388,7 @@ class _TicketPageState extends State<TicketPage> {
   Widget build(BuildContext context) {
     final s = Strings.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(s.t('ticket.title')), actions: const [LanguageMenu()]),
+      appBar: AppBar(title: Text(s.t('ticket.title')), actions: const [ThemeButton(), LanguageMenu()]),
       body: FutureBuilder<Ticket>(
         future: _ticket,
         builder: (context, snapshot) {

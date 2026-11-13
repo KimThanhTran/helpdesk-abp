@@ -3,6 +3,8 @@
 export const en = {
   'app.loading': 'Loading…',
   'language.label': 'Language',
+  'theme.dark': 'Switch to dark mode',
+  'theme.light': 'Switch to light mode',
 
   'nav.myTickets': 'My tickets',
   'nav.newTicket': 'New ticket',
@@ -179,6 +181,8 @@ export const en = {
 export const vi = {
   'app.loading': 'Đang tải…',
   'language.label': 'Ngôn ngữ',
+  'theme.dark': 'Chuyển sang giao diện tối',
+  'theme.light': 'Chuyển sang giao diện sáng',
 
   'nav.myTickets': 'Phiếu của tôi',
   'nav.newTicket': 'Tạo phiếu mới',

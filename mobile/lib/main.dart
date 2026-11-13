@@ -35,6 +35,8 @@ class _HelpdeskAppState extends State<HelpdeskApp> {
     // the server words its own messages in the language chosen here
     widget.api.language = _language.language;
     _language.addListener(() => widget.api.language = _language.language);
+    // the light or dark choice changes the theme of the whole app, which this widget builds
+    _language.addListener(() => setState(() {}));
     // an expired session sends the person back to the sign-in page, wherever they were
     widget.api.onSignedOut = () => setState(() => _signedIn = false);
   }
@@ -62,6 +64,7 @@ class _HelpdeskAppState extends State<HelpdeskApp> {
         navigatorKey: _navigator,
         theme: ThemeData(colorSchemeSeed: const Color(0xFF3B5BDB), useMaterial3: true),
         darkTheme: ThemeData(colorSchemeSeed: const Color(0xFF3B5BDB), brightness: Brightness.dark, useMaterial3: true),
+        themeMode: _language.themeMode,
         home: _signedIn
             ? TicketsPage(api: widget.api, pickImage: widget.pickImage, onSignOut: () => _changed(false))
             : LoginPage(api: widget.api, onSignedIn: () => _changed(true)),

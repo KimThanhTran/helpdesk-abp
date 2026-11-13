@@ -8,6 +8,8 @@
 
 A support desk built on the [ABP Framework](https://abp.io): people raise tickets, agents pick them up from a queue and work them to a close, and managers can follow everything in a Google Sheet. It is a REST API with a PostgreSQL database, a React web UI with live notifications, and a Flutter app for requesters.
 
+![A requester writes a ticket: the category is suggested while typing, an image is attached, and the page switches to Vietnamese](docs/demo.gif)
+
 ![An agent's view of a ticket: the actions the server allows, suggestions from similar closed tickets, and the attached images (one internal)](docs/agent-ticket.jpg)
 
 The focus of the project is getting the hard parts right and proving it: the ticket life cycle, who may do what, the privacy of internal notes, SLA targets in business hours, safe ticket numbering under load, and an export to Google Sheets that cannot leak or corrupt data.
@@ -26,6 +28,7 @@ The focus of the project is getting the hard parts right and proving it: the tic
 - **A React web UI** ([frontend](frontend)) and **a Flutter app** for requesters ([mobile](mobile/README.md)). Both show exactly the buttons the API lists in `actions`.
 - **Images on tickets.** PNG, JPEG or WebP, up to 5 MB each and five per ticket, on the web UI (choose files or paste a screenshot with Ctrl+V, on the New ticket form or later on the ticket) and in the Flutter app (after the ticket exists). The type is decided from the file's bytes, never from its name, and a requester can neither see nor learn about an agent's internal images.
 - **Excel export.** An agent downloads the queue (with the filters on screen) or the report as a real `.xlsx` file: frozen bold header, filters, real dates.
+- **Light and dark.** A sun/moon button next to the language switch; without a choice it follows the system, and the choice is remembered (web) or kept for the session (Flutter).
 - **English and Vietnamese.** A language switch in the web UI header and the Flutter app bar; the choice is remembered (web) or follows the phone (Flutter). The API also answers its own messages in the language it is asked for with `Accept-Language: vi` (or `?culture=vi`), and the UI sends it for you.
 - **Reports:** counts by status, priority and category, average time to resolve, and what is overdue right now.
 - **Google Sheets export** through a Google Apps Script, signed and privacy-first. See [integrations/google-sheets](integrations/google-sheets/README.md).
@@ -188,8 +191,8 @@ Running the whole stack against PostgreSQL, with real HTTP and real tokens, foun
 | Application (123 against SQLite, 38 plain) | 161 | real seeded users and real permission checks: workflow, 403/404/409, internal-note and internal-image privacy, SLA pause, notifications, triage, attachments, Excel export, the demo data, lists and paging, categories, reports, roles, the Sheets export, and rules about the shape of the code (every service needs a permission); the Excel writer is checked by reading the files back |
 | PostgreSQL (Testcontainers) | 4 | the migrations apply, the model matches them, ticket numbers survive 50 simultaneous requests |
 | Google Apps Script (Node, fakes of Google) | 23 | signatures, replay, tampering, idempotency, ordering |
-| Web UI (Vitest) | 104 | the API client's errors, routes, uploads and downloads, SLA wording, notifications, the ticket page's buttons, attaching images (what is refused before upload, creating a ticket with images and what happens when one fails), pasting screenshots, Excel export buttons, the language switch and that both dictionaries match |
-| Flutter (`flutter test`) | 33 | the API client, the sign-in, open and confirm flow, attaching images and switching language against a fake server |
+| Web UI (Vitest) | 112 | the API client's errors, routes, uploads and downloads, SLA wording, notifications, the ticket page's buttons, attaching images (what is refused before upload, creating a ticket with images and what happens when one fails), pasting screenshots, Excel export buttons, the language switch, the light/dark button and that both dictionaries match |
+| Flutter (`flutter test`) | 35 | the API client, the sign-in, open and confirm flow, attaching images, switching language and light/dark against a fake server |
 | End to end (`scripts/smoke_test.py`) | 70 checks | the whole Docker stack over HTTP, including real multipart uploads, a 5 MB limit, opening the downloaded `.xlsx`, and an error answered in Vietnamese (more checks when the Sheets stand-in is attached) |
 
 The tests were also checked the other way round: deliberately breaking a guard, the internal-note filter, the "not your ticket" check and the replay protection each turned tests red.

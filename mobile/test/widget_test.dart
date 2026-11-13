@@ -195,6 +195,40 @@ void main() {
     });
   });
 
+  group('light and dark', () {
+    Brightness shown(WidgetTester tester) => Theme.of(tester.element(find.byKey(const Key('user')))).brightness;
+
+    testWidgets('the button offers the other look, switches the whole app, and works on every screen', (tester) async {
+      await start(tester);
+      expect(shown(tester), Brightness.light);
+      expect(find.byTooltip('Switch to dark mode'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('theme')));
+      await tester.pumpAndSettle();
+      expect(shown(tester), Brightness.dark);
+      expect(find.byTooltip('Switch to light mode'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('theme')));
+      await tester.pumpAndSettle();
+      expect(shown(tester), Brightness.light);
+    });
+
+    testWidgets('the choice follows the person to the other screens, and its label follows the language', (tester) async {
+      await start(tester, language: 'vi');
+      await tester.tap(find.byKey(const Key('theme')));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Chuyển sang giao diện sáng'), findsOneWidget);
+
+      await signIn(tester, 'good');
+      expect(Theme.of(tester.element(find.byKey(const Key('ticket-HD-1')))).brightness, Brightness.dark);
+      expect(find.byKey(const Key('theme')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('ticket-HD-1')));
+      await tester.pumpAndSettle();
+      expect(Theme.of(tester.element(find.byKey(const Key('theme')))).brightness, Brightness.dark);
+    });
+  });
+
   group('language', () {
     testWidgets('the sign-in page can be switched to Vietnamese and back', (tester) async {
       await start(tester);

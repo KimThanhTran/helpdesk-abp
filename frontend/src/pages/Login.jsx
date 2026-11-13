@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../auth';
 import { ErrorBox } from '../components/bits';
 import { LanguageSwitch, useT } from '../i18n';
+import { ThemeSwitch } from '../theme';
 
 // Demo accounts from the seed data. Hidden when the build sets VITE_SHOW_DEMO_USERS=false.
 const DEMO = [['alice', 'requester'], ['bob', 'requester'], ['agent1', 'agent']];
@@ -31,7 +32,7 @@ export default function Login() {
     <main className="narrow">
       <div className="row">
         <h1>Helpdesk</h1>
-        <LanguageSwitch />
+        <span className="who"><LanguageSwitch /><ThemeSwitch /></span>
       </div>
       <form onSubmit={submit} className="card">
         <label>{t('login.user')}

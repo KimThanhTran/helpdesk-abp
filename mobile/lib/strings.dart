@@ -6,6 +6,8 @@ import 'api.dart';
 const Map<String, Map<String, String>> texts = {
   'en': {
     'language': 'Language',
+    'theme.dark': 'Switch to dark mode',
+    'theme.light': 'Switch to light mode',
     'login.user': 'User name',
     'login.password': 'Password',
     'login.submit': 'Sign in',
@@ -63,6 +65,8 @@ const Map<String, Map<String, String>> texts = {
   },
   'vi': {
     'language': 'Ngôn ngữ',
+    'theme.dark': 'Chuyển sang giao diện tối',
+    'theme.light': 'Chuyển sang giao diện sáng',
     'login.user': 'Tên đăng nhập',
     'login.password': 'Mật khẩu',
     'login.submit': 'Đăng nhập',
@@ -122,11 +126,21 @@ const Map<String, Map<String, String>> texts = {
 
 const languages = {'en': 'English', 'vi': 'Tiếng Việt'};
 
-/// The language in use. Changing it rebuilds every screen that asked for [Strings.of].
+/// The language and the light or dark look in use. Changing either rebuilds every screen that asked for [Strings.of].
 class LanguageController extends ChangeNotifier {
   LanguageController(this._language);
 
   String _language;
+  ThemeMode _themeMode = ThemeMode.system;
+
+  /// Follows the phone until the person presses the sun or moon button.
+  ThemeMode get themeMode => _themeMode;
+
+  set themeMode(ThemeMode value) {
+    if (value == _themeMode) return;
+    _themeMode = value;
+    notifyListeners();
+  }
 
   String get language => _language;
 
@@ -170,6 +184,24 @@ class Strings {
 
 class StringsScope extends InheritedNotifier<LanguageController> {
   const StringsScope({super.key, required LanguageController controller, required super.child}) : super(notifier: controller);
+}
+
+/// The light or dark button for an app bar: it offers the look that is not showing now.
+class ThemeButton extends StatelessWidget {
+  const ThemeButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.dependOnInheritedWidgetOfExactType<StringsScope>()!.notifier!;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final label = Strings.of(context).t(dark ? 'theme.light' : 'theme.dark');
+    return IconButton(
+      key: const Key('theme'),
+      tooltip: label,
+      icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+      onPressed: () => controller.themeMode = dark ? ThemeMode.light : ThemeMode.dark,
+    );
+  }
 }
 
 /// The language button for an app bar.

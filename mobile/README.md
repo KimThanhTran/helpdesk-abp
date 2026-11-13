@@ -7,7 +7,7 @@ web UI and shows exactly the buttons the server lists in `actions`, so the rules
 ```bash
 cd mobile
 flutter pub get
-flutter test                                             # 33 tests: API client, sign-in / confirm flow, attaching images, languages
+flutter test                                             # 35 tests: API client, sign-in / confirm flow, attaching images, languages, light/dark
 flutter run -d chrome --dart-define=API_URL=http://localhost:8080
 ```
 
@@ -32,6 +32,11 @@ again. Images are fetched with the sign-in token and shown from memory; tap one 
 The translate button in the app bar switches between English and Vietnamese on every screen. The app starts in Vietnamese on a
 phone set to Vietnamese and in English otherwise, and it tells the API (`Accept-Language`) so error messages from the server
 are in the same language. All texts are in `lib/strings.dart`; a test fails if the two languages drift apart.
+
+## Light and dark
+
+The sun/moon button next to the language button switches the look. It starts from the phone's setting; the choice is kept
+until the app is closed (like the language, it is not saved to the device).
 
 ## What it does not do
 

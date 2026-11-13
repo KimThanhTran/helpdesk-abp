@@ -3,9 +3,11 @@
   --brand: #3b5bdb; --good: #2b8a3e; --bad: #c92a2a; --warn: #e67700;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--text);
 }
+:root { color-scheme: light; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #14171f; --card: #1e232e; --text: #e8eaf0; --muted: #98a2b3; --line: #2e3544; --brand: #748ffc; --good: #69db7c; --bad: #ff8787; --warn: #ffc078; }
+  :root:not([data-theme='light']) { color-scheme: dark; --bg: #14171f; --card: #1e232e; --text: #e8eaf0; --muted: #98a2b3; --line: #2e3544; --brand: #748ffc; --good: #69db7c; --bad: #ff8787; --warn: #ffc078; }
 }
+:root[data-theme='dark'] { color-scheme: dark; --bg: #14171f; --card: #1e232e; --text: #e8eaf0; --muted: #98a2b3; --line: #2e3544; --brand: #748ffc; --good: #69db7c; --bad: #ff8787; --warn: #ffc078; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); }
 a { color: var(--brand); }
@@ -110,3 +112,4 @@ blockquote { margin: .5rem 0; padding-left: .75rem; border-left: 3px solid var(-
 
 select.lang { width: auto; padding: .25rem .4rem; }
 .badge, .sla { white-space: nowrap; }
+button.icon { padding: .25rem .5rem; line-height: 1; }
