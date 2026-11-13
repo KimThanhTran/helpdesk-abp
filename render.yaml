@@ -1,6 +1,17 @@
-# Render blueprint for the API. The database is a free Neon PostgreSQL (create it at neon.tech and paste its
-# connection string below when Render asks), because Render's own free database is deleted after 30 days.
+# Render blueprint: the API and its PostgreSQL, both on Render's free plan. Nothing here needs a password or an address
+# typed in: the database reaches the API through DATABASE_URL, and the API reads its own public address from
+# RENDER_EXTERNAL_URL (see Helpdesk.Hosting.PlatformSettings).
+#
+# Two limits of the free plan to know about: the web service sleeps after 15 minutes without a request (the first one
+# afterwards takes about a minute), and the free database is deleted 30 days after it was created. For anything that must
+# last, use a paid database or a hosted one (Neon, for example) and set ConnectionStrings__Default to its connection string.
 # Step by step: docs/deploy.md
+databases:
+  - name: helpdesk-db
+    plan: free
+    databaseName: helpdesk
+    user: helpdesk
+
 services:
   - type: web
     name: helpdesk-api
@@ -10,17 +21,15 @@ services:
     dockerContext: ./backend
     healthCheckPath: /api/abp/application-configuration
     envVars:
-      # Npgsql format: Host=...;Port=5432;Database=...;User ID=...;Password=...;SSL Mode=Require
-      - key: ConnectionStrings__Default
-        sync: false
-      # The public address of this service, e.g. https://helpdesk-api.onrender.com (known after the first deploy)
-      - key: App__SelfUrl
-        sync: false
-      - key: AuthServer__Authority
-        sync: false
-      # Where the UI is hosted, e.g. https://kimthanhtran.github.io
+      - key: PORT
+        value: "8080" # the port the container listens on (ASPNETCORE_URLS in the Dockerfile); Render sends traffic there
+      - key: DATABASE_URL
+        fromDatabase:
+          name: helpdesk-db
+          property: connectionString
+      # Where the UI is hosted: the GitHub Pages address, which is the user name in lower case, with no path
       - key: App__CorsOrigins
-        sync: false
+        value: https://kimthanhtran.github.io
       - key: AuthServer__RequireHttpsMetadata
         value: "false" # Render ends TLS in front of the container; the container itself speaks HTTP
       - key: AuthServer__SwaggerClientId

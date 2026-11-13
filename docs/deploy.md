@@ -1,41 +1,39 @@
 # Putting the demo online
 
-The UI is a static site (GitHub Pages) and the API is a Docker web service with a PostgreSQL database.
-Everything below has a free tier. You need your own accounts: nothing can be created for you.
+The UI is a static site (GitHub Pages) and the API is a Docker web service with a PostgreSQL database, all on free plans.
+You need your own accounts (Render and GitHub): nothing can be created for you.
 
 | Part | Where | Cost |
 |---|---|---|
 | UI | GitHub Pages, built by `.github/workflows/pages.yml` | free |
-| API | Render web service from `render.yaml` | free (sleeps after 15 min idle, about a minute to wake) |
-| Database | Neon PostgreSQL | free |
+| API + database | Render, from `render.yaml` | free: the API sleeps after 15 minutes idle (about a minute to wake) and the free database is deleted after 30 days |
 
-## 1. Database
+## 1. API and database
 
-Create a Neon project and copy the connection details into Npgsql format:
-`Host=<host>;Port=5432;Database=<db>;User ID=<user>;Password=<password>;SSL Mode=Require`
+1. In Render choose **New → Blueprint**, connect this repository and apply `render.yaml`. It creates the PostgreSQL and the
+   API; nothing has to be typed in. The API reads the database from `DATABASE_URL` and its own address from
+   `RENDER_EXTERNAL_URL` (`Helpdesk.Hosting.PlatformSettings`), and creates the tables and the demo users on its first start
+   (`Helpdesk__MigrateOnStartup`).
+2. Open `<service address>/api/abp/application-configuration` (the address is on the service's page, for example
+   `https://helpdesk-api.onrender.com`): a JSON answer means the API is up.
 
-## 2. API
+To keep the data longer than 30 days, use a database that lasts (Neon, or a paid Render one) and set
+`ConnectionStrings__Default` on the service to its connection string in Npgsql form
+(`Host=…;Port=5432;Database=…;User ID=…;Password=…;SSL Mode=Require`). It takes precedence over `DATABASE_URL`.
 
-1. In Render choose **New → Blueprint** and pick this repository. Render reads `render.yaml`.
-2. Fill the values it asks for: the connection string, and for now any placeholder for the three URLs.
-3. After the first deploy copy the service address (for example `https://helpdesk-api.onrender.com`) into
-   `App__SelfUrl` and `AuthServer__Authority`, and your Pages address into `App__CorsOrigins`
-   (for this repository: `https://kimthanhtran.github.io`). Render redeploys.
-4. Open `<service address>/api/abp/application-configuration`: a JSON answer means the API is up.
-   The first start creates the tables and the demo users (`Helpdesk__MigrateOnStartup`).
-
-## 3. UI
+## 2. UI
 
 1. In the repository settings choose **Pages → Source: GitHub Actions**.
 2. Add a repository variable `API_URL` with the service address (**Settings → Secrets and variables → Actions →
-   Variables**), then push to `main` or run the **Pages** workflow by hand.
-3. The site is at `https://<user>.github.io/helpdesk-abp/`.
+   Variables**), then run the **Pages** workflow.
+3. The site is at `https://<user>.github.io/helpdesk-abp/`. The API allows that origin through `App__CorsOrigins`
+   in `render.yaml` (the user name in lower case, no path); change it there if the repository belongs to someone else.
 
 ## Rehearse it first, on your own computer
 
 `docs/rehearsal/docker-compose.yml` is the online setup in miniature: the API alone on `http://localhost:8090`, a plain
-PostgreSQL where Neon would be, no separate migration step (`Helpdesk__MigrateOnStartup`), and CORS allowing
-`http://localhost:4173`. Serve the UI from that other origin the way Pages would:
+PostgreSQL, no separate migration step (`Helpdesk__MigrateOnStartup`), the database and the address given the way Render
+gives them (`DATABASE_URL`, `RENDER_EXTERNAL_URL`), and CORS allowing `http://localhost:4173`. Serve the UI from that other origin the way Pages would:
 
 ```bash
 docker compose -f docs/rehearsal/docker-compose.yml -p rehearsal up -d --build

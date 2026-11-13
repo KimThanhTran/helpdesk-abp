@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Helpdesk.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,6 +13,9 @@ public class Program
 {
     public async static Task<int> Main(string[] args)
     {
+        // a hosting platform (Render) names its settings its own way; this maps them before anything reads the configuration
+        PlatformSettings.Apply(Environment.GetEnvironmentVariable, Environment.SetEnvironmentVariable);
+
         Log.Logger = new LoggerConfiguration()
 #if DEBUG
             .MinimumLevel.Debug()

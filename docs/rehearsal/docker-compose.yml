@@ -1,4 +1,4 @@
-# A local stand-in for the online setup: the API alone on its own address, a plain PostgreSQL where Neon would be,
+# A local stand-in for the online setup: the API alone on its own address, a plain PostgreSQL,
 # no separate migration step (Helpdesk__MigrateOnStartup), and the UI served from a different origin (the "Pages" site).
 services:
   db:
@@ -22,13 +22,12 @@ services:
     ports:
       - "8090:8080"
     environment:
-      ConnectionStrings__Default: "Host=db;Port=5432;Database=Helpdesk;User ID=neon;Password=rehearsal-pw"
-      App__SelfUrl: "http://localhost:8090"
-      AuthServer__Authority: "http://localhost:8090"
+      # the two settings Render provides; PlatformSettings turns them into the connection string and the addresses
+      DATABASE_URL: "postgres://neon:rehearsal-pw@db:5432/Helpdesk"
+      RENDER_EXTERNAL_URL: "http://localhost:8090"
       AuthServer__RequireHttpsMetadata: "false"
       AuthServer__SwaggerClientId: "Helpdesk_Demo"
       App__CorsOrigins: "http://localhost:4173"
       Helpdesk__MigrateOnStartup: "true"
       Helpdesk__SeedDemoData: "true"
       Helpdesk__SeedDemoTickets: "true"
-      OpenIddict__Applications__Helpdesk_Swagger__RootUrl: "http://localhost:8090"
