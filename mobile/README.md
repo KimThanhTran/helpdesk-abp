@@ -38,6 +38,11 @@ are in the same language. All texts are in `lib/strings.dart`; a test fails if t
 The sun/moon button next to the language button switches the look. It starts from the phone's setting; the choice is kept
 until the app is closed (like the language, it is not saved to the device).
 
+## Flutter version
+
+Built and tested with Flutter 3.41.9, and CI is pinned to it. Newer stable releases deprecate `package:flutter/material.dart` in
+favour of `material_ui`, which makes `flutter analyze` report an info on every file; the app has not been moved to it yet.
+
 ## What it does not do
 
 - **No live updates.** The web UI gets SignalR notifications; here a list refreshes when you pull it down or come back to it.
