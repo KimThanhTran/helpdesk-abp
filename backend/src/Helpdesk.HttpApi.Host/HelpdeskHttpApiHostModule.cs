@@ -233,6 +233,8 @@ public class HelpdeskHttpApiHostModule : AbpModule
                         .Select(o => o.RemovePostFix("/"))
                         .ToArray() ?? Array.Empty<string>())
                     .WithAbpExposedHeaders()
+                    // a page on another origin (GitHub Pages) can only read a download's file name if it is exposed
+                    .WithExposedHeaders("Content-Disposition")
                     .SetIsOriginAllowedToAllowWildcardSubdomains()
                     .AllowAnyHeader()
                     .AllowAnyMethod()
@@ -241,18 +243,25 @@ public class HelpdeskHttpApiHostModule : AbpModule
         });
     }
 
+    public override async Task OnPreApplicationInitializationAsync(ApplicationInitializationContext context)
+    {
+        // For hosts that cannot run a separate migration step (a free web service, for example): create or update the
+        // schema and seed before serving. Leave it off when the migrator image runs first, as in docker-compose.yml.
+        // This is the pre-initialization phase on purpose: ABP's own modules save their permission and setting
+        // definitions to the database as they initialize, and on an empty database that fails if the tables are not there yet.
+        if (context.GetConfiguration().GetValue<bool>("Helpdesk:MigrateOnStartup"))
+        {
+            await context.ServiceProvider.GetRequiredService<HelpdeskDbMigrationService>().MigrateAsync();
+        }
+
+        await base.OnPreApplicationInitializationAsync(context);
+    }
+
     public override async Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
     {
         // The base method runs OnApplicationInitialization below, which builds the HTTP pipeline.
         // Overriding the async version without calling it leaves every route returning 404.
         await base.OnApplicationInitializationAsync(context);
-
-        // For hosts that cannot run a separate migration step (a free web service, for example): create or update the
-        // schema and seed before serving. Leave it off when the migrator image runs first, as in docker-compose.yml.
-        if (context.GetConfiguration().GetValue<bool>("Helpdesk:MigrateOnStartup"))
-        {
-            await context.ServiceProvider.GetRequiredService<HelpdeskDbMigrationService>().MigrateAsync();
-        }
 
         await context.AddBackgroundWorkerAsync<TicketAutoCloseWorker>();
     }

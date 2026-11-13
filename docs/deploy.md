@@ -31,6 +31,24 @@ Create a Neon project and copy the connection details into Npgsql format:
    Variables**), then push to `main` or run the **Pages** workflow by hand.
 3. The site is at `https://<user>.github.io/helpdesk-abp/`.
 
+## Rehearse it first, on your own computer
+
+`docs/rehearsal/docker-compose.yml` is the online setup in miniature: the API alone on `http://localhost:8090`, a plain
+PostgreSQL where Neon would be, no separate migration step (`Helpdesk__MigrateOnStartup`), and CORS allowing
+`http://localhost:4173`. Serve the UI from that other origin the way Pages would:
+
+```bash
+docker compose -f docs/rehearsal/docker-compose.yml -p rehearsal up -d --build
+cd frontend && VITE_BASE=/helpdesk-abp/ VITE_API_URL=http://localhost:8090 npm run build -- --outDir ../site/helpdesk-abp
+cd ../site && python -m http.server 4173        # open http://localhost:4173/helpdesk-abp/
+docker compose -p rehearsal down -v             # when you are done
+```
+
+This found two things worth knowing before a real deploy: the first start on an empty database used to log errors
+because ABP saves its permission definitions as it starts (the migration now runs before that), and a page on another
+origin cannot read a download's file name unless the API exposes `Content-Disposition` (it now does). On Windows,
+Git Bash rewrites `VITE_BASE=/helpdesk-abp/` into a disk path; set `MSYS_NO_PATHCONV=1` there (GitHub Actions is not affected).
+
 ## Things to know
 
 - The demo accounts (`alice`, `bob`, `agent1`, password `1q2w3E*`) are public. Turn `SeedDemoData` off and create

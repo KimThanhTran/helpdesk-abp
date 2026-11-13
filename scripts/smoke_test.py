@@ -264,6 +264,12 @@ def main():
           status == 200 and headers["Content-Type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"), str(status))
     check("it is a valid zip with the ticket in it and no formulas", "Printer jams" in sheet_text(workbook) and "<f>" not in sheet_text(workbook))
     check("the file has a dated name", ".xlsx" in (headers["Content-Disposition"] or ""))
+    # the UI on another origin (the Pages site, or the Flutter web build) reads that name; the browser hides it unless exposed
+    _, cross, _ = raw("GET", "/api/app/ticket-export/tickets?Filter=Printer", agent, headers={"Origin": "http://localhost:5001"})
+    check("a page on an allowed origin may read the download's file name",
+          "Content-Disposition" in (cross["Access-Control-Expose-Headers"] or ""), str(cross["Access-Control-Expose-Headers"]))
+    _, other, _ = raw("GET", "/api/app/ticket-export/tickets?Filter=Printer", agent, headers={"Origin": "http://evil.example"})
+    check("and a page on an origin that is not allowed gets no CORS permission", other["Access-Control-Allow-Origin"] is None)
     empty = raw("GET", "/api/app/ticket-export/tickets?Filter=zzzzzz", agent)[2]
     check("a filter that matches nothing leaves only the header row", "Printer jams" not in sheet_text(empty))
     check("a requester cannot export (403)", raw("GET", "/api/app/ticket-export/tickets", alice)[0] == 403)
