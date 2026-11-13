@@ -167,6 +167,9 @@ public class TicketAppService : HelpdeskAppService, ITicketAppService
 
         await _tickets.UpdateAsync(ticket, autoSave: true);
 
+        // the people who want to read a reply (the requester, by mail) hear about every saved comment
+        await _eventBus.PublishAsync(new TicketCommentedEventData(ticket.Id, comment.Id, actor.UserId, input.Visibility));
+
         // most comments change nothing a report cares about; tell listeners only when something did
         if (ticket.Status != statusBefore || ticket.FirstRespondedAt != respondedBefore)
         {

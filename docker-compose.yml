@@ -65,12 +65,31 @@ services:
       Helpdesk__Sheets__Secret: "${SHEETS_SECRET:-}"
       Helpdesk__Sheets__IncludeTitle: "${SHEETS_INCLUDE_TITLE:-false}"
       Helpdesk__Sheets__IncludePeople: "${SHEETS_INCLUDE_PEOPLE:-false}"
+      # E-mail to the requester, and replies by mail: off unless MAIL_HOST and MAIL_FROM are set (see docs/email.md)
+      Helpdesk__Email__Host: "${MAIL_HOST:-}"
+      Helpdesk__Email__Port: "${MAIL_PORT:-587}"
+      Helpdesk__Email__UseSsl: "${MAIL_USE_SSL:-true}"
+      Helpdesk__Email__User: "${MAIL_USER:-}"
+      Helpdesk__Email__Password: "${MAIL_PASSWORD:-}"
+      Helpdesk__Email__From: "${MAIL_FROM:-}"
+      Helpdesk__Email__PublicUrl: "${MAIL_PUBLIC_URL:-http://localhost:3000}"
+      Helpdesk__Email__Language: "${MAIL_LANGUAGE:-en}"
+      Helpdesk__Email__InboundSecret: "${MAIL_INBOUND_SECRET:-}"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf \"GET /api/abp/application-configuration HTTP/1.0\r\n\r\n\" >&3 && head -1 <&3 | grep -q 200'"]
       interval: 5s
       timeout: 5s
       retries: 30
       start_period: 15s
+
+  # Optional: a mail server that only catches mail, with a page to read it on http://localhost:8025. Start with
+  #   MAIL_HOST=mailpit MAIL_PORT=1025 MAIL_USE_SSL=false MAIL_FROM=helpdesk@example.test MAIL_INBOUND_SECRET=dev-inbound-secret \
+  #   docker compose --profile mail-demo up --build
+  mailpit:
+    profiles: ["mail-demo"]
+    image: axllent/mailpit:v1.21
+    ports:
+      - "8025:8025"
 
   # Optional: runs the real Code.gs against an in-memory fake of Google Sheets, so the whole export chain can be
   # tried without a Google account. Set SHEETS_WEBHOOK_URL=http://sheets-stub:8787/exec and SHEETS_SECRET=dev-secret.

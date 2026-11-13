@@ -49,6 +49,11 @@ because ABP saves its permission definitions as it starts (the migration now run
 origin cannot read a download's file name unless the API exposes `Content-Disposition` (it now does). On Windows,
 Git Bash rewrites `VITE_BASE=/helpdesk-abp/` into a disk path; set `MSYS_NO_PATHCONV=1` there (GitHub Actions is not affected).
 
+## E-mail (optional)
+
+Add the mail settings to the Render service the same way (see [email.md](email.md)): `Helpdesk__Email__Host`, `…__Port`,
+`…__User`, `…__Password`, `…__From`, `…__PublicUrl` (your Pages address). Leave them out and no mail is sent.
+
 ## Things to know
 
 - The demo accounts (`alice`, `bob`, `agent1`, password `1q2w3E*`) are public. Turn `SeedDemoData` off and create

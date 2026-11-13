@@ -1,4 +1,5 @@
 using Helpdesk.Categories;
+using Helpdesk.Email;
 using Helpdesk.Export;
 using Helpdesk.Integrations;
 using Helpdesk.Notifications;
@@ -76,5 +77,15 @@ public class EfCoreTicketExportTests : TicketExportTests<HelpdeskEntityFramework
 
 [Collection(HelpdeskTestConsts.CollectionDefinitionName)]
 public class EfCoreDemoDataTests : DemoDataTests<HelpdeskEntityFrameworkCoreTestModule>
+{
+}
+
+[Collection(HelpdeskTestConsts.CollectionDefinitionName)]
+public class EfCoreMailTests : MailTests<HelpdeskEntityFrameworkCoreTestModule>
+{
+}
+
+[Collection(HelpdeskTestConsts.CollectionDefinitionName)]
+public class EfCoreInboundEmailTests : InboundEmailTests<HelpdeskEntityFrameworkCoreTestModule>
 {
 }

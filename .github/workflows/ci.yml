@@ -64,19 +64,24 @@ jobs:
       - run: flutter test
 
   end-to-end:
-    name: End to end (Docker stack + Google Sheets stand-in)
+    name: End to end (Docker stack + Google Sheets and mail stand-ins)
     runs-on: ubuntu-latest
     env:
       SHEETS_WEBHOOK_URL: http://sheets-stub:8787/exec
       SHEETS_SECRET: ci-secret
       SHEETS_INCLUDE_TITLE: "true"
       SHEETS_INCLUDE_PEOPLE: "true"
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      MAIL_USE_SSL: "false"
+      MAIL_FROM: helpdesk@example.test
+      MAIL_INBOUND_SECRET: ci-inbound-secret
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose --profile sheets-demo up -d --build
-      - run: SHEETS_DUMP_URL=http://localhost:8787/dump python3 scripts/smoke_test.py http://localhost:8080
+      - run: docker compose --profile sheets-demo --profile mail-demo up -d --build
+      - run: SHEETS_DUMP_URL=http://localhost:8787/dump MAIL_DUMP_URL=http://localhost:8025 python3 scripts/smoke_test.py http://localhost:8080
       - name: Show container logs when something failed
         if: failure()
-        run: docker compose --profile sheets-demo logs --no-color --tail=200
-      - run: docker compose --profile sheets-demo down -v
+        run: docker compose --profile sheets-demo --profile mail-demo logs --no-color --tail=200
+      - run: docker compose --profile sheets-demo --profile mail-demo down -v
         if: always()

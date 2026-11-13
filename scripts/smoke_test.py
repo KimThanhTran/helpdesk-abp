@@ -9,6 +9,8 @@ Exits with a non-zero status if any check fails.
 If SHEETS_DUMP_URL is set (the URL of integrations/google-sheets/local-server.js /dump, with the API pointed at
 it and IncludeTitle/IncludePeople on), it also checks that the ticket reached the Google Sheet intact.
 """
+import hashlib
+import hmac
 import io
 import json
 import os
@@ -95,6 +97,30 @@ def sheet_text(xlsx_bytes, part="xl/worksheets/sheet1.xml"):
     with zipfile.ZipFile(io.BytesIO(xlsx_bytes)) as archive:
         assert archive.testzip() is None
         return archive.read(part).decode("utf-8")
+
+
+def mail_in(dump_url, to, code):
+    """The mails Mailpit holds for one address about one ticket: [(subject, text)]."""
+    with urllib.request.urlopen(f"{dump_url.rstrip('/')}/api/v1/messages?limit=200", timeout=30) as response:
+        listed = json.load(response)["messages"]
+    found = []
+    for item in listed:
+        if code in item["Subject"] and any(a["Address"].lower() == to.lower() for a in item["To"]):
+            with urllib.request.urlopen(f"{dump_url.rstrip('/')}/api/v1/message/{item['ID']}", timeout=30) as response:
+                found.append((item["Subject"], json.load(response)["Text"]))
+    return found
+
+
+def inbound(secret, payload, timestamp=None, signature=None):
+    """POST a signed reply to /api/inbound-email the way a mail provider would; returns (status, parsed json)."""
+    body = json.dumps(payload).encode()
+    stamp = str(int(time.time()) if timestamp is None else timestamp)
+    sign = signature or "sha256=" + hmac.new(secret.encode(), stamp.encode() + b"." + body, hashlib.sha256).hexdigest()
+    status, _, raw_body = raw("POST", "/api/inbound-email", None, body, {"Content-Type": "application/json", "X-Timestamp": stamp, "X-Signature": sign})
+    try:
+        return status, json.loads(raw_body) if raw_body else None
+    except ValueError:
+        return status, None
 
 
 def check(name, condition, detail=""):
@@ -277,6 +303,34 @@ def main():
     status, headers, report = raw("GET", "/api/app/ticket-export/summary", agent)
     check("the agent downloads the report as .xlsx with four sheets",
           status == 200 and "Tickets created" in sheet_text(report) and "xl/worksheets/sheet4.xml" in zipfile.ZipFile(io.BytesIO(report)).namelist(), str(status))
+
+    mail_url = os.environ.get("MAIL_DUMP_URL")
+    if mail_url:
+        print("\nE-mail")
+        secret = os.environ.get("MAIL_INBOUND_SECRET", "dev-inbound-secret")
+        mailed = expect("alice reads the ticket the mails are about", call("GET", f"/api/app/ticket/{shot}", alice), 200)
+        confirmation = mail_in(mail_url, "alice@example.com", mailed["code"])
+        check("alice was mailed a confirmation with the ticket code in the subject",
+              len(confirmation) == 1 and confirmation[0][0] == f"[{mailed['code']}] We received your ticket", str(confirmation))
+        check("the mail links to the ticket and says replying adds a comment",
+              "/#/tickets/" in confirmation[0][1] and "Reply to this email" in confirmation[0][1])
+        subject = f"Re: [{mailed['code']}] We received your ticket"
+        reply = {"from": "Alice <alice@example.com>", "subject": subject, "text": "Thanks, it is the third floor printer.\n\nOn Mon, 2 Nov 2026 Helpdesk wrote:\n> We received your ticket"}
+        status, _ = inbound(secret, reply)
+        check("a signed reply from alice is accepted (202)", status == 202, str(status))
+        comments = expect("alice reads her ticket again", call("GET", f"/api/app/ticket/{shot}", alice), 200)["comments"]
+        check("the reply is a comment from alice, without the quoted mail",
+              [c["body"] for c in comments] == ["Thanks, it is the third floor printer."] and comments[0]["author"]["name"] == "alice", str(comments))
+        check("a request with a wrong signature is refused (401)", inbound(secret, reply, signature="sha256=" + "0" * 64)[0] == 401)
+        check("a request that is too old is refused (401)", inbound(secret, reply, timestamp=int(time.time()) - 3600)[0] == 401)
+        status, ignored = inbound(secret, {**reply, "from": "bob@example.com"})
+        check("a reply from someone else is understood but not used (200)", status == 200 and ignored["ignored"] == "WrongSender", str(ignored))
+        check("so there is still exactly one comment",
+              len(call("GET", f"/api/app/ticket/{shot}", alice)[1]["comments"]) == 1)
+        status, _ = call("POST", f"/api/app/ticket/{shot}/comment", agent, {"body": "Which printer exactly?"})
+        check("an agent's public comment is mailed to alice", status == 200 and any("New reply" in s and "Which printer exactly?" in t for s, t in mail_in(mail_url, "alice@example.com", mailed["code"])))
+        call("POST", f"/api/app/ticket/{shot}/comment", agent, {"body": "INTERNAL-NOTE-9c1e", "visibility": 2})
+        check("an internal note is never mailed", all("INTERNAL-NOTE-9c1e" not in t for _, t in mail_in(mail_url, "alice@example.com", mailed["code"])))
 
     print("\nLists and reports")
     mine = expect("alice's tickets", call("GET", "/api/app/ticket/my-list", alice), 200)
